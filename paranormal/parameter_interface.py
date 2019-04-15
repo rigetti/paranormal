@@ -387,7 +387,7 @@ def from_json_serializable_dict(dictionary: dict) -> Params:
         raise ValueError('Dictionary Format Not Recognized!')
     # handle case with nested params
     unraveled_dictionary = {}
-    for k, v in type(cls).__dict__.items():
+    for k, v in cls.__dict__.items():
         if not k.startswith('_'):
             if isinstance(v, BaseDescriptor):
                 unraveled_dictionary[k] = temp_dictionary[k]
