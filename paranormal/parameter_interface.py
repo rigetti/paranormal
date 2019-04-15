@@ -5,7 +5,7 @@ from collections import Mapping
 from enum import Enum, EnumMeta
 import importlib
 import re
-from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 import yaml
 
 import numpy as np
@@ -15,8 +15,7 @@ from pampy import match, _
 __all__ = ['BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam', 'SetParam',
            'ArangeParam', 'EnumParam', 'GeomspaceParam', 'Params', 'to_json_serializable_dict',
            'from_json_serializable_dict', 'to_yaml_file', 'from_yaml_file',
-           'create_parser_and_parser_args', 'to_argparse', 'convert_to_si_units', 'BaseParams',
-           'meas_config_to_base_params']
+           'create_parser_and_parser_args', 'to_argparse', 'convert_to_si_units']
 
 
 #################################
