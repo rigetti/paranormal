@@ -82,7 +82,6 @@ def test_set_param():
     assert p.param1 == {1, 2, 3}
 
 
-@pytest.mark.skip("Enums not working")
 def test_enum_param():
     class MyEnum(Enum):
         RED = 0

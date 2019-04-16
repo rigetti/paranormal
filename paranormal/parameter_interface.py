@@ -184,7 +184,7 @@ class EnumParam(BaseDescriptor):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.cls = cls
-        self.default = default
+        self.default = default.name if default is not None else None
         self.required = required
         self.help = help
         super(EnumParam, self).__init__(**kwargs)
