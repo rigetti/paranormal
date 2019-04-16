@@ -50,7 +50,6 @@ class BoolParam(BaseDescriptor):
         self.help = help
         super(BoolParam, self).__init__(**kwargs)
 
-
     def __get__(self, instance, owner) -> bool:
         return instance.__dict__.get(self.name, self.default)
 
@@ -69,7 +68,6 @@ class FloatParam(BaseDescriptor):
         self.help = help
         self.unit = unit
         super(FloatParam, self).__init__(**kwargs)
-
 
     def __get__(self, instance, owner) -> Optional[float]:
         if self.required and self.name not in instance.__dict__:
@@ -94,7 +92,6 @@ class IntParam(BaseDescriptor):
         self.unit = unit
         super(IntParam, self).__init__(**kwargs)
 
-
     def __get__(self, instance, owner) -> Optional[int]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
@@ -115,7 +112,6 @@ class StringParam(BaseDescriptor):
         self.required = required
         self.help = help
         super(StringParam, self).__init__(**kwargs)
-
 
     def __get__(self, instance, owner) -> Optional[str]:
         if self.required and self.name not in instance.__dict__:
@@ -141,7 +137,6 @@ class ListParam(BaseDescriptor):
         self.unit = unit
         self.subtype = subtype
         super(ListParam, self).__init__(**kwargs)
-
 
     def __get__(self, instance, owner) -> Optional[List]:
         if self.required and self.name not in instance.__dict__:
@@ -169,7 +164,6 @@ class SetParam(BaseDescriptor):
         self.subtype = subtype
         super(SetParam, self).__init__(**kwargs)
 
-
     def __get__(self, instance, owner) -> Optional[Set]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
@@ -193,7 +187,6 @@ class EnumParam(BaseDescriptor):
         self.required = required
         self.help = help
         super(EnumParam, self).__init__(**kwargs)
-
 
     def __get__(self, instance, owner) -> Optional[Enum]:
         if self.required and self.name not in instance.__dict__:
