@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "paranormal"
+version = "0.1.0"
+description = "Coherent management of large parameter lists in Python"
+authors = ["Schuyler Fried <schuyler@rigetti.com>", "Steven Heidel <steven@rigetti.com>"]
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+numpy = "^1.16"
+PyYAML = "^5.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^4.4"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
