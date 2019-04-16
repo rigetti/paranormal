@@ -336,7 +336,10 @@ class Params(Mapping):
 
     def __add__(self, other):
         cls = _merge_param_classes([type(self), type(other)], merge_positional_params=False)
-        return cls(**self, **other)
+        kwargs = {k : v for k, v in self.items() if not isinstance(v, )}
+        del kwargs['_type']
+        del kwargs['_module']
+        return cls(**kwargs)
 
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
