@@ -183,8 +183,10 @@ class EnumParam(BaseDescriptor):
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
+        if default not in cls and default is not None:
+            raise ValueError(f'Default {default} is not a member of {cls}')
         self.cls = cls
-        self.default = default.name if default is not None else None
+        self.default = default
         self.required = required
         self.help = help
         super(EnumParam, self).__init__(**kwargs)
@@ -192,17 +194,20 @@ class EnumParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[Enum]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return self.cls[instance.__dict__.get(self.name, self.default)]
+        return instance.__dict__.get(self.name, self.default)
 
     def __set__(self, instance, value):
         if value in self.cls:
-            instance.__dict__[self.name] = value.name
-        elif value in self.cls.__members__:
             instance.__dict__[self.name] = value
+        elif value in self.cls.__members__:
+            instance.__dict__[self.name] = self.cls[value]
         else:
             raise KeyError(f'{value} is not a valid member of {self.cls.__name__}')
+
+    def to_json(self, instance, include_default: bool = True):
+        default = getattr(self, 'default', None) if include_default else None
+        tmp = instance.__dict__.get(self.name, default)
+        return tmp.name if tmp is not None else None
 
 
 class GeomspaceParam(BaseDescriptor):
