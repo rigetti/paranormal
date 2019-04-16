@@ -15,7 +15,8 @@ from pampy import match, _
 __all__ = ['BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam', 'SetParam',
            'ArangeParam', 'EnumParam', 'GeomspaceParam', 'Params', 'to_json_serializable_dict',
            'from_json_serializable_dict', 'to_yaml_file', 'from_yaml_file',
-           'create_parser_and_parser_args', 'to_argparse', 'convert_to_si_units']
+           'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args',
+           'convert_to_si_units']
 
 
 #################################
@@ -334,7 +335,8 @@ class Params(Mapping):
         return getattr(self, item)
 
     def __add__(self, other):
-        return _merge_param_classes([self, other], merge_positional_params=False)(**self, **other)
+        cls = _merge_param_classes([type(self), type(other)], merge_positional_params=False)
+        return cls(**self, **other)
 
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
@@ -414,6 +416,9 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
     """
     Merge multiple Params classes into a single merged params class and return the merged class
     """
+    if len(params_cls_list) == 1:
+        return params_cls_list[0]
+
     class MergedParams(Params):
         __doc__ = f'A Combination of {len(params_cls_list)} Params Classes:\n'
 
@@ -434,7 +439,8 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
                        if getattr(v, 'positional', False)}
         # Just parse all positionals as a ListParam - we'll match them back up later in
         # _parse_positional_arguments
-        positional_param = ListParam(help=', '.join(v.help for v in positionals.values()),
+        positional_param = ListParam(help=', '.join(v.help for v in positionals.values()
+                                                    if v.help != SUPPRESS),
                                      positional=True, required=True, nargs='+')
         setattr(MergedParams, 'positionals', positional_param)
         for k in positionals.keys():
@@ -559,11 +565,13 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     required = True if getattr(param, 'required', False) else None
     default = param.default if required is None else None
     unit = getattr(param, 'unit', None)
-    if param.help != SUPPRESS:
+
+    # format help nicely if default is specified and suppress is not set
+    if positional or param.help == SUPPRESS:
+        help = param.help
+    else:
         help = f'{param.help} [default: {default} {unit}]' \
             if unit is not None else f'{param.help} [default: {default}]'
-    else:
-        help = param.help
     if not required and positional:
         # TODO: use nargs='*' or nargs='?' to support not-required positional arguments
         raise ValueError('Not-required positional arguments are currently not supported')
@@ -571,6 +579,7 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
         # positional arguments are required by default, and argparse complains if you specify
         # required = True
         required = None
+        default = None
     action = match(param,
                    BoolParam, lambda p: 'store_true' if not p.default else 'store_false',
                    BaseDescriptor, lambda p: None)
@@ -693,11 +702,11 @@ def _flatten_cls_params(cls: type(Params)) -> Dict:
     return flattend_params
 
 
-def to_argparse(cls: type(Params)) -> ArgumentParser:
+def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     """
     Convert a Params class or subclass to an argparse argument parser.
     """
-    parser = ArgumentParser(description=cls.__doc__)
+    parser = ArgumentParser(description=cls.__doc__, **kwargs)
 
     for name, param in _flatten_cls_params(cls).items():
         if getattr(param, 'expand', False):
@@ -749,15 +758,13 @@ def from_parsed_args(cls_list: Tuple[type(Params)], params_namespace: Namespace)
     return tuple(params_instance_list)
 
 
-def create_parser_and_parser_args(*cls, throw_on_unknown: bool=False
-                                  ) -> Union[Tuple[Params], Params]:
+def create_parser_and_parser_args(*cls,
+                                  throw_on_unknown: bool = False,
+                                  **kwargs) -> Union[Tuple[Params], Params]:
     """
     Outside interface for creating a parser from multiple Params classes and parsing arguments
     """
-    if len(cls) > 1:
-        parser = to_argparse(_merge_param_classes(cls))
-    else:
-        parser = to_argparse(cls[0])
+    parser = to_argparse(_merge_param_classes(cls), **kwargs)
     args, argv = parser.parse_known_args()
     if argv != [] and throw_on_unknown:
         raise ValueError(f'Unknown arguments: {argv}')
