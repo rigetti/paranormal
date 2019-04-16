@@ -742,10 +742,12 @@ def from_parsed_args(cls_list: Tuple[type(Params)], params_namespace: Namespace)
     for cls in cls_list:
         positional_params.update({k: v for k, v in cls.__dict__.items()
                                   if getattr(v, 'positional', False)})
-    # now we must match the positional params to the list of positional arguments we got back
-    matched_pos_args = _parse_positional_arguments(params.get('positionals', None),
-                                                   positional_params)
-    params.update(matched_pos_args)
+    if 'positionals' in params:
+        parsed_positionals = params['positionals']
+        # now we must match the positional params to the list of positional arguments we got back
+        matched_pos_args = _parse_positional_arguments(parsed_positionals,
+                                                       positional_params)
+        params.update(matched_pos_args)
 
     # handle expanded params
     expanded_params = {}
