@@ -340,6 +340,9 @@ class Params(Mapping):
     def __getitem__(self, item):
         return getattr(self, item)
 
+    def __add__(self, other):
+        return _merge_param_classes([self, other], merge_positional_params=False)(**self, **other)
+
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
     """
@@ -413,8 +416,8 @@ def from_yaml_file(filename: str) -> Params:
     return params
 
 
-def merge_param_classes(params_cls_list = List[type(Params)],
-                        merge_positional_params: bool = True) -> type(Params):
+def _merge_param_classes(params_cls_list = List[type(Params)],
+                         merge_positional_params: bool = True) -> type(Params):
     """
     Merge multiple Params classes into a single merged params class and return the merged class
     """
@@ -759,7 +762,7 @@ def create_parser_and_parser_args(*cls, throw_on_unknown: bool=False
     Outside interface for creating a parser from multiple Params classes and parsing arguments
     """
     if len(cls) > 1:
-        parser = to_argparse(merge_param_classes(cls))
+        parser = to_argparse(_merge_param_classes(cls))
     else:
         parser = to_argparse(cls[0])
     args, argv = parser.parse_known_args()
