@@ -269,6 +269,17 @@ class ArangeParam(BaseDescriptor):
         instance.__dict__[self.name] = value
 
 
+class SpanArangeParam(ArangeParam):
+    def __get__(self, instance, owner):
+        if self.required and self.name not in instance.__dict__:
+            raise ValueError(f'{self.name} is a required argument and must be set first!')
+        if instance.__dict__.get(self.name, self.default) is None:
+            return None
+        center, width, step = instance.__dict__.get(self.name, self.default)
+        return convert_to_si_units(np.arange(center - 0.5 * width, center + 0.5 * width, step),
+                                   self.unit)
+
+
 ###################
 # Unit Conversion #
 ###################
@@ -461,6 +472,7 @@ def _get_param_type(param) -> type:
     Get the expected type of a param
     """
     argtype = match(param,
+                    ArangeParam, lambda x: float,
                     GeomspaceParam, lambda x: float,
                     ListParam, lambda x: param.subtype,
                     SetParam, lambda x: param.subtype,
@@ -612,8 +624,11 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
     parse as '--start X --stop X --num X' or '--start X --stop X --step X', etc.
     """
     new_arg_names = match(param,
+                          SpanArangeParam, ['center', 'width', 'step'],
                           GeomspaceParam, ['start', 'stop', 'num'],
                           ArangeParam, ['start', 'stop', 'step'])
+    prefix = getattr(param, 'prefix', '')
+    new_arg_names = [prefix + n for n in new_arg_names]
     if getattr(param, 'positional', False):
         raise ValueError(f'Cannot expand positional {param.__class__.__name__} to {new_arg_names}')
     expanded_types = match(param,
@@ -716,7 +731,16 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     """
     parser = ArgumentParser(description=cls.__doc__, **kwargs)
 
-    for name, param in _flatten_cls_params(cls).items():
+    # first, we flatten the cls params (means flattening any nested Params classes
+    flattened_params = _flatten_cls_params(cls)
+
+    # Check if multiple params are to be expanded. If so, we need a prefix on each of the expanded
+    # names to avoid conflict
+    if sum(getattr(p, 'expand', False) for p in flattened_params.values()) > 1:
+        for p in flattened_params.values():
+            assert not (getattr(p, 'expand', False) ^ getattr(p, 'prefix', '') != '')
+
+    for name, param in flattened_params:
         if getattr(param, 'expand', False):
             for (n, p) in _expand_multi_arg_param(name, param):
                 _add_param_to_parser(n, p, parser)
