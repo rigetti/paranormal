@@ -2,7 +2,7 @@
 name = "paranormal"
 version = "0.1.0"
 description = "Coherent management of large parameter lists in Python"
-authors = ["Schuyler Fried <schuyler@rigetti.com>", "Steven Heidel <steven@rigetti.com>"]
+authors = ["Schuyler Fried <schuylerfried@gmail.com>", "Steven Heidel <steven@rigetti.com>"]
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
