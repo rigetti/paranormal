@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from paranormal.parameter_interface import BoolParam, Params, FloatParam, IntParam, StringParam, ListParam, SetParam, \
-    EnumParam, GeomspaceParam, ArangeParam
+    EnumParam, GeomspaceParam, ArangeParam, SpanArangeParam
 
 
 def test_bool_param():
@@ -111,3 +111,11 @@ def test_arange_param():
 
     p = MyParams(param1=[1, 2, 0.1])
     assert len(p.param1) == 10
+
+
+def test_span_arange_param():
+    class MyParams(Params):
+        param1 = SpanArangeParam(help="An evenly spaced list created with center, width, step")
+
+    p = MyParams(param1=[1, 2, 0.1])
+    assert len(p.param1) == 20

@@ -13,9 +13,9 @@ from pampy import match, _
 
 
 __all__ = ['BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam', 'SetParam',
-           'ArangeParam', 'EnumParam', 'GeomspaceParam', 'Params', 'to_json_serializable_dict',
-           'from_json_serializable_dict', 'to_yaml_file', 'from_yaml_file',
-           'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args',
+           'ArangeParam', 'EnumParam', 'GeomspaceParam', 'SpanArangeParam', 'Params',
+           'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
+           'from_yaml_file', 'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args',
            'convert_to_si_units']
 
 
@@ -419,7 +419,7 @@ def to_yaml_file(params: Params, filename: str, include_defaults: bool=False):
     Dump to yaml
     """
     with open(filename, 'w') as f:
-        yaml.dump(to_json_serializable_dict(params, include_defaults=include_defaults), f)
+        yaml.dump(to_json_serializable_dict(params, include_defaults=include_defaults), stream=f)
 
 def from_yaml_file(filename: str) -> Params:
     """
