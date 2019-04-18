@@ -39,7 +39,7 @@ def test_int_param():
     class MyParams(Params):
         param1 = IntParam(help="An int param that's required", required=True)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         MyParams()
 
     p = MyParams(param1=4)

@@ -1,6 +1,6 @@
 from argparse import ArgumentParser, Namespace, SUPPRESS
 import copy
-from collections import Mapping
+from collections import defaultdict, Mapping
 import importlib
 import re
 from typing import Dict, List, Optional, Tuple, Union
@@ -12,7 +12,7 @@ from paranormal.params import *
 
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
-           'from_yaml_file', 'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args']
+           'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args']
 
 
 ####################
@@ -38,7 +38,7 @@ class Params(Mapping):
         cls = type(self)
         for key, value in kwargs.items():
             if not key in cls.__dict__:
-                raise TypeError(f'{cls.__name__} does not take {key} as an argument')
+                raise KeyError(f'{cls.__name__} does not take {key} as an argument')
             setattr(self, key, value)
         _check_for_required_arguments(cls, kwargs)
 
@@ -53,6 +53,9 @@ class Params(Mapping):
     def __getitem__(self, item):
         return getattr(self, item)
 
+    def __eq__(self, other):
+        return to_json_serializable_dict(self) == to_json_serializable_dict(other)
+
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
     """
@@ -66,8 +69,8 @@ def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
         elif getattr(v, 'required', None) and not k in kwargs:
             required_but_not_provided.append(k)
     if required_but_not_provided != []:
-        raise ValueError(f'{required_but_not_provided} are required arguments to instantiate '
-                         f'{cls.__name__}')
+        raise KeyError(f'{required_but_not_provided} are required arguments to instantiate '
+                       f'{cls.__name__}')
 
 
 def to_json_serializable_dict(params: Params, include_defaults: bool = True) -> dict:
@@ -102,7 +105,7 @@ def from_json_serializable_dict(dictionary: dict) -> Params:
     unraveled_dictionary = {}
     for k, v in cls.__dict__.items():
         if not k.startswith('_'):
-            if isinstance(v, BaseDescriptor):
+            if isinstance(v, BaseDescriptor) and k in temp_dictionary:
                 unraveled_dictionary[k] = temp_dictionary[k]
             elif isinstance(v, Params):
                 unraveled_dictionary[k] = from_json_serializable_dict(temp_dictionary[k])
@@ -138,12 +141,14 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
         __doc__ = f'A Combination of {len(params_cls_list)} Params Classes:\n'
 
     for params_cls in params_cls_list:
+        import pdb; pdb.set_trace()
         for k, v in params_cls.__dict__.items():
             if not k.startswith('_'):
                 if hasattr(MergedParams, k):
                     raise ValueError(f'Unable to merge classes {params_cls_list} due to conflicting'
                                      f'param: {k}')
                 setattr(MergedParams, k, v)
+                v.__set_name__(MergedParams, k)
         MergedParams.__doc__ += f'\n\t {params_cls.__name__} - {params_cls.__doc__}'
 
     # resolve positional arguments:
@@ -158,6 +163,7 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
                                                     if v.help != SUPPRESS),
                                      positional=True, required=True, nargs='+')
         setattr(MergedParams, 'positionals', positional_param)
+        positional_param.__set_name__(MergedParams, 'positionals')
         for k in positionals.keys():
             delattr(MergedParams, k)
     return MergedParams
@@ -185,10 +191,10 @@ def _convert_type_to_regex(argtype: type) -> str:
     """
     Source of truth for getting regex strings to match different types
     """
-    return match(argtype,
-                 type(int), lambda x: r'\b[\+-]?\d+\b',
-                 type(float), lambda x: r'\b[\+-]?\d*\.\d*([eE][\+-]?\d+)?\b',
-                 type(str), lambda x: r'\b.*\b')
+    regex_patterns = {int : r'\b[\+-]?(?<![\.\d])\d+(?!\.\d)\b',
+                      float : r'[-\+]?(?:\d+(?<!\.)\.(?!\.)\d*|\.\d+)(?:[eE][-\+]?\d+)?',
+                      str : r'\S+'}
+    return regex_patterns[argtype]
 
 
 def _parse_positional_arguments(list_of_positionals: List[str],
@@ -238,7 +244,9 @@ def _parse_positional_arguments(list_of_positionals: List[str],
     # first sort unmatched params by least to most restrictive type (int, float, str)
     def _type_sorter(p) -> int:
         argtype = _get_param_type(p[1])
-        return match(argtype, type(int), 1, type(float), 2, type(str), 3, _, 4)
+        order = defaultdict(lambda x: 4)
+        order.update({int: 1, float: 2, str: 3})
+        return order[argtype]
 
     for name, param in sorted(copied_pos_params.items(), key=_type_sorter):
         positionals_str = ' '.join(copied_pos_list)
@@ -492,9 +500,9 @@ def from_parsed_args(cls_list: Tuple[type(Params)], params_namespace: Namespace)
     return tuple(params_instance_list)
 
 
-def create_parser_and_parser_args(*cls,
-                                  throw_on_unknown: bool = False,
-                                  **kwargs) -> Union[Tuple[Params], Params]:
+def create_parser_and_parse_args(*cls,
+                                 throw_on_unknown: bool = False,
+                                 **kwargs) -> Union[Tuple[Params], Params]:
     """
     Outside interface for creating a parser from multiple Params classes and parsing arguments
     """
