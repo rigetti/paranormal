@@ -1,315 +1,18 @@
-from abc import ABC
 from argparse import ArgumentParser, Namespace, SUPPRESS
 import copy
 from collections import Mapping
-from enum import Enum, EnumMeta
 import importlib
 import re
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import yaml
 
-import numpy as np
 from pampy import match, _
 
-
-__all__ = ['BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam', 'SetParam',
-           'ArangeParam', 'EnumParam', 'GeomspaceParam', 'SpanArangeParam', 'Params',
-           'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
-           'from_yaml_file', 'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args',
-           'convert_to_si_units']
+from paranormal.params import *
 
 
-#################################
-# All the Different Param Types #
-#################################
-
-class BaseDescriptor(ABC):
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-    def __get__(self, instance, owner):
-        return instance.__dict__.get(self.name, None)
-
-    def __set__(self, instance, value):
-        instance.__dict__[self.name] = value
-
-    def __set_name__(self, owner, name):
-        self.name = name
-
-    def to_json(self, instance, include_default: bool = True):
-        return instance.__dict__.get(self.name,
-                                     getattr(self, 'default', None) if include_default else None)
-
-
-class BoolParam(BaseDescriptor):
-    def __init__(self, *, help: str, default: bool, **kwargs):
-        if 'required' in kwargs or default is None:
-            raise ValueError('BoolParam cannot be a required argument '
-                             'and must have a default value')
-        self.default = default
-        self.help = help
-        super(BoolParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> bool:
-        return instance.__dict__.get(self.name, self.default)
-
-
-class FloatParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[float] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(FloatParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[float]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(instance.__dict__.get(self.name, self.default), self.unit)
-
-
-class IntParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[int] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(IntParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[int]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(instance.__dict__.get(self.name, self.default), self.unit)
-
-
-class StringParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[str] = None,
-                 required: Optional[bool] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        super(StringParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[str]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return instance.__dict__.get(self.name, self.default)
-
-
-class ListParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 subtype: type = str,
-                 default: Optional[List] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        self.subtype = subtype
-        super(ListParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[List]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return list(convert_to_si_units(v, self.unit)
-                    for v in instance.__dict__.get(self.name, self.default))
-
-
-class SetParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 subtype: type = str,
-                 default: Optional[Set] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        self.subtype = subtype
-        super(SetParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[Set]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return set(convert_to_si_units(v, self.unit)
-                   for v in instance.__dict__.get(self.name, self.default))
-
-
-class EnumParam(BaseDescriptor):
-    def __init__(self, *,
-                 help: str,
-                 cls: EnumMeta,
-                 default: Optional[Enum] = None,
-                 required: Optional[bool] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        if default not in cls and default is not None:
-            raise ValueError(f'Default {default} is not a member of {cls}')
-        self.cls = cls
-        self.default = default
-        self.required = required
-        self.help = help
-        super(EnumParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[Enum]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        return instance.__dict__.get(self.name, self.default)
-
-    def __set__(self, instance, value):
-        if value in self.cls:
-            instance.__dict__[self.name] = value
-        elif value in self.cls.__members__:
-            instance.__dict__[self.name] = self.cls[value]
-        else:
-            raise KeyError(f'{value} is not a valid member of {self.cls.__name__}')
-
-    def to_json(self, instance, include_default: bool = True):
-        default = getattr(self, 'default', None) if include_default else None
-        tmp = instance.__dict__.get(self.name, default)
-        return tmp.name if tmp is not None else None
-
-
-class GeomspaceParam(BaseDescriptor):
-    nargs = 3
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[List] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(GeomspaceParam, self).__init__(**kwargs)
-
-
-    def __get__(self, instance, owner) -> Optional[np.ndarray]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(np.geomspace(*instance.__dict__.get(self.name, self.default)),
-                                   self.unit)
-
-    def __set__(self, instance, value):
-        assert (isinstance(value, list) and value[0] != 0 and len(value) == 3) or value is None
-        instance.__dict__[self.name] = value
-
-
-class ArangeParam(BaseDescriptor):
-    nargs = 3
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[List] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(ArangeParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[np.ndarray]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(np.arange(*instance.__dict__.get(self.name, self.default)),
-                                   self.unit)
-
-    def __set__(self, instance, value):
-        assert (isinstance(value, list) and len(value) == 3) or value is None
-        instance.__dict__[self.name] = value
-
-
-class SpanArangeParam(ArangeParam):
-    def __get__(self, instance, owner):
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        center, width, step = instance.__dict__.get(self.name, self.default)
-        return convert_to_si_units(np.arange(center - 0.5 * width, center + 0.5 * width, step),
-                                   self.unit)
-
-
-###################
-# Unit Conversion #
-###################
-
-
-UNIT_CONVERSION_TABLE = {"GHz" : 1.0e9,
-                         "MHz": 1.0e6,
-                         "ns": 1.0e-9,
-                         "μs": 1.0e-6,
-                         "mV": 1.0e-3,
-                         "mW": 1.0e-3,
-                         "dBm": 1,
-                         "V": 1,
-                         "Hz": 1,
-                         "s": 1,
-                         "Scalar": 1}
-
-
-def convert_to_si_units(value, unit: Optional[str] = None):
-    """
-    Convert value to SI units from specified unit.
-    """
-    if unit is None:
-        return value
-    try:
-        return value * UNIT_CONVERSION_TABLE[unit]
-    except KeyError:
-        raise KeyError(f'Unit "{unit}" not in conversion table!')
-    except TypeError:
-        raise TypeError(f'Unit "{unit}" not compatible with value {value} of type {type(value)}')
+__all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
+           'from_yaml_file', 'create_parser_and_parser_args', 'to_argparse', 'from_parsed_args']
 
 
 ####################
@@ -349,13 +52,6 @@ class Params(Mapping):
 
     def __getitem__(self, item):
         return getattr(self, item)
-
-    def __add__(self, other):
-        cls = _merge_param_classes([type(self), type(other)], merge_positional_params=False)
-        kwargs = {k : v for k, v in self.items() if not isinstance(v, )}
-        del kwargs['_type']
-        del kwargs['_module']
-        return cls(**kwargs)
 
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
@@ -626,20 +322,24 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
     new_arg_names = match(param,
                           SpanArangeParam, ['center', 'width', 'step'],
                           GeomspaceParam, ['start', 'stop', 'num'],
-                          ArangeParam, ['start', 'stop', 'step'])
+                          ArangeParam, ['start', 'stop', 'step'],
+                          LinspaceParam, ['start', 'stop', 'num'])
     prefix = getattr(param, 'prefix', '')
     new_arg_names = [prefix + n for n in new_arg_names]
     if getattr(param, 'positional', False):
         raise ValueError(f'Cannot expand positional {param.__class__.__name__} to {new_arg_names}')
     expanded_types = match(param,
                            GeomspaceParam, [FloatParam, FloatParam, IntParam],
-                           ArangeParam, [FloatParam, FloatParam, FloatParam])
+                           ArangeParam, [FloatParam, FloatParam, FloatParam],
+                           LinspaceParam, [FloatParam, FloatParam, IntParam])
     unit = getattr(param, 'unit', None)
     expanded_units = match(param,
                            GeomspaceParam,
                            lambda p: [unit, unit, None],
                            ArangeParam,
-                           lambda p: [unit, unit, unit])
+                           lambda p: [unit, unit, unit],
+                           LinspaceParam,
+                           lambda p: [unit, unit, None])
     defaults = getattr(param, 'default', [None, None, None])
     if defaults is None:
         defaults = [None, None, None]
