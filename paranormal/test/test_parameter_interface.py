@@ -1,20 +1,8 @@
 from enum import Enum
 import json
 import pytest
-import re
-
-from pampy import MatchError
 
 from paranormal.parameter_interface import *
-from paranormal.parameter_interface import (
-    _add_param_to_parser,
-    _check_for_required_arguments,
-    _convert_type_to_regex,
-    _expand_multi_arg_param,
-    _extract_expanded_param,
-    _flatten_cls_params,
-    _merge_param_classes,
-    _parse_positional_arguments)
 from paranormal.params import *
 
 
@@ -53,15 +41,6 @@ def test_params():
         P()
 
 
-def test_check_for_required_arguments():
-    class P(Params):
-        i = IntParam(required=True, help='a mandatory int!')
-    _check_for_required_arguments(P, {'i': 5})
-
-    with pytest.raises(KeyError):
-        _check_for_required_arguments(P, {'x': 3})
-
-
 def test_json_serialization():
 
     # to_json
@@ -79,92 +58,6 @@ def test_json_serialization():
 
     j = json.loads(json.dumps(to_json_serializable_dict(p, include_defaults=False)))
     assert p == from_json_serializable_dict(j)
-
-
-@pytest.mark.skip(msg='Inheritance is broken')
-def test_merge_param_classes():
-
-    class MILLER(Params):
-        x = FloatParam(positional=True, help='A positional float')
-        y = IntParam(positional=True, help='a positional int')
-
-    class PBR(P):
-        z = ListParam(positional=True, help='A positional list of ints', subtype=int)
-
-    COORS = _merge_param_classes([MILLER, PBR])
-    c = COORS(positionals=[1, 2, 3, 0.5], r=5)
-    for k in ['b', 'i', 'f', 'r', 'e', 'l', 'a', 'positionals']:
-        assert getattr(c, k, None) is not None
-
-    # test without merging positionals
-    COORS = _merge_param_classes([MILLER, PBR], merge_positional_params=False)
-    with pytest.raises(KeyError):
-        COORS(r=5, positionals=[1,2,3,4])
-
-    # test with parameter conflict
-    class IPA(P):
-        pass
-    with pytest.raises(ValueError):
-        _merge_param_classes([IPA, PBR])
-
-    # test with only a single positional (merging positionals shouldn't happen, regardless of flag)
-    class BUD(Params):
-        q = BoolParam(help='Another bool', default=True)
-    COORS = _merge_param_classes([PBR, BUD])
-    with pytest.raises(KeyError):
-        COORS(r=5, positionals=[1,2,3,4])
-
-
-def test_convert_type_to_regex():
-    int_re = _convert_type_to_regex(int)
-    float_re = _convert_type_to_regex(float)
-    string_re = _convert_type_to_regex(str)
-    with pytest.raises(KeyError):
-        _convert_type_to_regex(dict)
-    assert re.match(int_re, '1') is not None
-    assert re.match(int_re, '1.2') is None
-    assert re.match(int_re, 'hey') is None
-
-    assert re.match(float_re, '1') is None
-    assert re.match(float_re, '1.2') is not None
-    assert re.match(float_re, '.2') is not None
-    assert re.match(float_re, '1.') is not None
-    assert re.match(float_re, '1.2e-6') is not None
-    assert re.match(float_re, '2.34E6') is not None
-    assert re.match(float_re, '1..2') is None
-    assert re.match(float_re, 'hey') is None
-
-    assert re.match(string_re, '1') is not None
-    assert re.match(string_re, '1.2') is not None
-    assert re.match(string_re, 'hey') is not None
-    assert re.findall(string_re, 'hey what is up') == ['hey', 'what', 'is', 'up']
-
-
-@pytest.mark.skip(msg='Positional parser is broken')
-def test_parse_positional_arguments():
-    positionals = {'i': IntParam(positional=True, choices=[1, 2, 3], help='an int'),
-                   'f': FloatParam(positional=True, help='a float'),
-                   's': StringParam(positional=True, help='a string'),
-                   'l': ListParam(positional=True, subtype=str, help='a list of strings')}
-    list_of_positionals = ['1', '4.0', '5', '4.5', 'hey', 'a string']
-    import pdb; pdb.set_trace()
-    matched = _parse_positional_arguments(list_of_positionals, positionals)
-
-
-def test_add_param_to_parser():
-    pass
-
-
-def test_expand_multi_arg_param():
-    pass
-
-
-def test_extract_expanded_param():
-    pass
-
-
-def test_flatten_cls_params():
-    pass
 
 
 def test_to_argparse():

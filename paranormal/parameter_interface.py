@@ -193,7 +193,7 @@ def _convert_type_to_regex(argtype: type) -> str:
     """
     regex_patterns = {int : r'\b[\+-]?(?<![\.\d])\d+(?!\.\d)\b',
                       float : r'[-\+]?(?:\d+(?<!\.)\.(?!\.)\d*|\.\d+)(?:[eE][-\+]?\d+)?',
-                      str : r'\S+'}
+                      str : r'\b.*\b'}
     return regex_patterns[argtype]
 
 
@@ -214,12 +214,12 @@ def _parse_positional_arguments(list_of_positionals: List[str],
     correctly_matched_params = {}
     params_to_delete = []
     for name, param in copied_pos_params.items():
-        positionals_str = ' '.join(copied_pos_list)
         choices = getattr(param, 'choices', None)
         if choices is not None:
             nargs = str(getattr(param, 'nargs', 1))
             # convert to raw string to handle escape characters
-            matched = re.findall(r'|'.join(fr'{c}' for c in choices), positionals_str)
+            matched = [p for p in copied_pos_list
+                       if re.match(r'|'.join(fr'{c}' for c in choices), p)]
             if matched == []:
                 raise ValueError(f'Could not match any of the choices: {choices} in '
                                  f'positionals: {list_of_positionals} for param: {name}')
@@ -249,10 +249,9 @@ def _parse_positional_arguments(list_of_positionals: List[str],
         return order[argtype]
 
     for name, param in sorted(copied_pos_params.items(), key=_type_sorter):
-        positionals_str = ' '.join(copied_pos_list)
         argtype = _get_param_type(param)
         pattern = _convert_type_to_regex(argtype)
-        matched = re.findall(pattern, positionals_str)
+        matched = [p for p in copied_pos_list if re.match(pattern, p)]
         if matched == []:
             raise ValueError(f'Unable to find {argtype} in {list_of_positionals} for param: {name}')
         nargs = str(getattr(param, 'nargs', 1))
