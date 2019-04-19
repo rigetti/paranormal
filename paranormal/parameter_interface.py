@@ -285,6 +285,9 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
         raise NotImplementedError(f'Argparse type not implemented '
                                   f'for {param.__class__.__name__} and default not specifed')
     positional = getattr(param, 'positional', False)
+    if (getattr(param, 'prefix', '') != '' and not getattr(param, 'expand', False)):
+        raise ValueError(f'Failure with param {name}. Cannot add a prefix to a class without the'
+                         f' expand kwarg set to True')
     argname = name if positional else '--' + name
     required = True if getattr(param, 'required', False) else None
     default = param.default if required is None else None
