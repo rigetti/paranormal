@@ -174,6 +174,7 @@ def _get_param_type(param) -> type:
     Get the expected type of a param
     """
     argtype = match(param,
+                    LinspaceParam, lambda x: float,
                     ArangeParam, lambda x: float,
                     GeomspaceParam, lambda x: float,
                     ListParam, lambda x: param.subtype,
@@ -321,11 +322,12 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     parser.add_argument(argname, **kwargs)
 
 
-def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tuple, Tuple]:
+def _expand_param_name(param: BaseDescriptor) -> List[str]:
     """
-    Expand a parameter like GeomspaceParam or ArangeParam into seperate IntParams and FloatParams to
-    parse as '--start X --stop X --num X' or '--start X --stop X --step X', etc.
+    Get expanded param names
     """
+    if not getattr(param, 'expand', False):
+        raise ValueError('Cannot expand param that does not have the expand kwarg')
     new_arg_names = match(param,
                           SpanArangeParam, ['center', 'width', 'step'],
                           GeomspaceParam, ['start', 'stop', 'num'],
@@ -333,6 +335,15 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
                           LinspaceParam, ['start', 'stop', 'num'])
     prefix = getattr(param, 'prefix', '')
     new_arg_names = [prefix + n for n in new_arg_names]
+    return new_arg_names
+
+
+def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tuple, Tuple]:
+    """
+    Expand a parameter like GeomspaceParam or ArangeParam into seperate IntParams and FloatParams to
+    parse as '--start X --stop X --num X' or '--start X --stop X --step X', etc.
+    """
+    new_arg_names = _expand_param_name(param)
     if getattr(param, 'positional', False):
         raise ValueError(f'Cannot expand positional {param.__class__.__name__} to {new_arg_names}')
     expanded_types = match(param,
@@ -383,9 +394,7 @@ def _extract_expanded_param(parsed_values: dict,
     Convert [start, stop, num] or [start, stop, step], etc. from expanded form back into a list to
     be easily fed into the un-expanded param
     """
-    old_arg_names = match(param,
-                          GeomspaceParam, ['start', 'stop', 'num'],
-                          ArangeParam, ['start', 'stop', 'step'])
+    old_arg_names = _expand_param_name(param)
     assert parsed_values.get(name) is None, \
         f'{name} was expanded. Please provide {old_arg_names} instead'
     start_stop_x_list = [parsed_values[n] for n in old_arg_names]
@@ -445,9 +454,9 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     # names to avoid conflict
     if sum(getattr(p, 'expand', False) for p in flattened_params.values()) > 1:
         for p in flattened_params.values():
-            assert not (getattr(p, 'expand', False) ^ getattr(p, 'prefix', '') != '')
+            assert not (getattr(p, 'expand', False) ^ (getattr(p, 'prefix', '') != ''))
 
-    for name, param in flattened_params:
+    for name, param in flattened_params.items():
         if getattr(param, 'expand', False):
             for (n, p) in _expand_multi_arg_param(name, param):
                 _add_param_to_parser(n, p, parser)
