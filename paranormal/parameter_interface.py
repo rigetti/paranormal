@@ -550,5 +550,5 @@ def create_parser_and_parse_args(*cls,
     args, argv = parser.parse_known_args()
     if argv != [] and throw_on_unknown:
         raise ValueError(f'Unknown arguments: {argv}')
-    return from_parsed_args(cls, params_namespace=args) \
-        if len(cls) > 1 else from_parsed_args(cls, params_namespace=args)[0]
+    return from_parsed_args(*cls, params_namespace=args) \
+        if len(cls) > 1 else from_parsed_args(*cls, params_namespace=args)[0]

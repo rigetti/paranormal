@@ -1,6 +1,7 @@
 from argparse import Namespace
 from enum import Enum
 import json
+import mock
 import pytest
 
 import numpy as np
@@ -199,68 +200,15 @@ def test_from_parsed_args():
 
 
 def test_create_parser_and_parse_args():
-    pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # test that nested classes with positionals work
+    class PositionalsC(Params):
+        a_pos = PositionalsA()
+        b_pos = PositionalsB()
+
+    correct_items = [('a_pos', PositionalsA(x=1.0, z=[0.0, 1.0, 22.0], y='hey')),
+                     ('b_pos', PositionalsB(a=1, b=10))]
+    with mock.patch('paranormal.parameter_interface.ArgumentParser.parse_known_args') as pa:
+        pa.return_value = (Namespace(b=10, positionals=['1.0', 'hey', '0.0', '1.0', '22.0', '1']),
+                           [])
+        y = create_parser_and_parse_args(PositionalsC)
+    _compare_two_param_item_lists(y.items(), correct_items)
