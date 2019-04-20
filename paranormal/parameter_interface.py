@@ -112,7 +112,6 @@ def from_json_serializable_dict(dictionary: dict) -> Params:
     return cls(**unraveled_dictionary)
 
 
-# TODO: write functions to parse bringup params from a yaml and write them to a yaml
 def to_yaml_file(params: Params, filename: str, include_defaults: bool=False):
     """
     Dump to yaml
@@ -129,6 +128,24 @@ def from_yaml_file(filename: str) -> Params:
     return params
 
 
+def _merge_positional_params(params_list: List[Tuple[str, BaseDescriptor]]
+                             ) -> Tuple[List[str], Optional[BaseDescriptor]]:
+    """
+    Merge positional params into a single list param and return a list of param names that were
+    merged
+    """
+    if not sum([getattr(p, 'positional', False) for (_, p) in params_list]) > 1:
+        return [], None
+    positionals = {k: v for (k, v) in params_list
+                   if getattr(v, 'positional', False)}
+    # Just parse all positionals as a ListParam - we'll match them back up later in
+    # _parse_positional_arguments
+    positional_param = ListParam(help=', '.join(v.help for v in positionals.values()
+                                                if v.help != SUPPRESS),
+                                 positional=True, required=True, nargs='+')
+    return list(positionals.keys()), positional_param
+
+
 def _merge_param_classes(params_cls_list = List[type(Params)],
                          merge_positional_params: bool = True) -> type(Params):
     """
@@ -141,7 +158,6 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
         __doc__ = f'A Combination of {len(params_cls_list)} Params Classes:\n'
 
     for params_cls in params_cls_list:
-        import pdb; pdb.set_trace()
         for k, v in params_cls.__dict__.items():
             if not k.startswith('_'):
                 if hasattr(MergedParams, k):
@@ -153,19 +169,15 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
 
     # resolve positional arguments:
     if merge_positional_params:
-        if not sum([getattr(p, 'positional', False) for p in MergedParams.__dict__.values()]) > 1:
+        params_to_delete, positional_param = _merge_positional_params(
+            [(k, v) for k, v in MergedParams.__dict__.items() if not k.startswith('_')])
+        if positional_param is None and params_to_delete == []:
             return MergedParams
-        positionals = {k:v for k, v in MergedParams.__dict__.items()
-                       if getattr(v, 'positional', False)}
-        # Just parse all positionals as a ListParam - we'll match them back up later in
-        # _parse_positional_arguments
-        positional_param = ListParam(help=', '.join(v.help for v in positionals.values()
-                                                    if v.help != SUPPRESS),
-                                     positional=True, required=True, nargs='+')
         setattr(MergedParams, 'positionals', positional_param)
         positional_param.__set_name__(MergedParams, 'positionals')
-        for k in positionals.keys():
+        for k in params_to_delete:
             delattr(MergedParams, k)
+
     return MergedParams
 
 
@@ -193,7 +205,7 @@ def _convert_type_to_regex(argtype: type) -> str:
     Source of truth for getting regex strings to match different types
     """
     regex_patterns = {int : r'\b[\+-]?(?<![\.\d])\d+(?!\.\d)\b',
-                      float : r'[-\+]?(?:\d+(?<!\.)\.(?!\.)\d*|\.\d+)(?:[eE][-\+]?\d+)?',
+                      float : r'[-\+]?(?:\d+(?<!\.)\.?(?!\.)\d*|\.?\d+)(?:[eE][-\+]?\d+)?',
                       str : r'\b.*\b'}
     return regex_patterns[argtype]
 
@@ -415,8 +427,9 @@ def _flatten_cls_params(cls: type(Params)) -> Dict:
     3. If the class contains nested params classes, those will be flattened. Params with the same
         name in the encompassing class will overwrite the nested ones if overwrite is specified
         Otherwise, an error will be thrown.
+    4. Multiple positional params will be merged after flattening
     """
-    flattend_params = {}
+    flattened_params = {}
     # loop through and all the nested params first
     already_flat_params = {}
     for name, param in vars(cls).items():
@@ -428,20 +441,21 @@ def _flatten_cls_params(cls: type(Params)) -> Dict:
             already_flat_params[name] = param
         elif isinstance(param, Params):
             for n, p in _flatten_cls_params(type(param)).items():
-                if n in flattend_params:
+                if n in flattened_params:
                     raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
-                flattend_params[n] = p
+                flattened_params[n] = p
         elif isinstance(param, property):
             continue
         else:
             raise ValueError(f'Param: {name} of type {type(param)} is not recognized!')
 
     for name, param in already_flat_params.items():
-        if name in flattend_params and not getattr(param, 'override', False):
+        if name in flattened_params and not getattr(param, 'override', False):
             raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {name} - use'
                            f' kwarg override=True to override nested params')
-        flattend_params[name] = param
-    return flattend_params
+        flattened_params[name] = param
+
+    return flattened_params
 
 
 def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
@@ -452,6 +466,13 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
 
     # first, we flatten the cls params (means flattening any nested Params classes
     flattened_params = _flatten_cls_params(cls)
+
+    # merge any positional arguments
+    params_to_delete, positional_param = _merge_positional_params(list(flattened_params.items()))
+    for p in params_to_delete:
+        del flattened_params[p]
+    if positional_param is not None:
+        flattened_params['positionals'] = positional_param
 
     # Check if multiple params are to be expanded. If so, we need a prefix on each of the expanded
     # names to avoid conflict
@@ -474,16 +495,32 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     return parser
 
 
-def from_parsed_args(cls_list: Tuple[type(Params)], params_namespace: Namespace) -> Tuple:
+def _unflatten_params_cls(cls: type(Params), parsed_params: dict) -> Params:
+    """
+    Recursively construct a Params class or subclass (handles nested Params classes)
+    """
+    cls_specific_params = {}
+    for k, v in cls.__dict__.items():
+        if k.startswith('_'):
+            continue
+        elif isinstance(v, BaseDescriptor) and k in parsed_params:
+            cls_specific_params[k] = parsed_params[k]
+        elif isinstance(v, Params):
+            cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params)
+    return cls(**cls_specific_params)
+
+
+def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple:
     """
     Convert a list of params classes and an argparse parsed namespace to a list of class instances
     """
     params = vars(params_namespace)
 
+    flattened_classes = [_flatten_cls_params(cls) for cls in cls_list]
     # handle positional arguments
     positional_params = {}
-    for cls in cls_list:
-        positional_params.update({k: v for k, v in cls.__dict__.items()
+    for flattened_cls in flattened_classes:
+        positional_params.update({k: v for k, v in flattened_cls.items()
                                   if getattr(v, 'positional', False)})
     if 'positionals' in params:
         parsed_positionals = params['positionals']
@@ -494,21 +531,13 @@ def from_parsed_args(cls_list: Tuple[type(Params)], params_namespace: Namespace)
 
     # handle expanded params
     expanded_params = {}
-    for cls in cls_list:
+    for flattened_cls in flattened_classes:
         expanded_params.update({k: _extract_expanded_param(params, k, v)
-                                for k, v in vars(cls).items() if getattr(v, 'expand', False)})
+                                for k, v in flattened_cls.items() if getattr(v, 'expand', False)})
     params.update(expanded_params)
 
     # actually construct the params classes
-
-    params_instance_list = []
-    for cls in cls_list:
-        cls_specific_params = {k: params[k] for k, v in cls.__dict__.items()
-                               if not k.startswith('_') and
-                               k in params and
-                               isinstance(v, BaseDescriptor)}
-        params_instance_list.append(cls(**cls_specific_params))
-    return tuple(params_instance_list)
+    return tuple(_unflatten_params_cls(cls, params) for cls in cls_list)
 
 
 def create_parser_and_parse_args(*cls,
@@ -521,4 +550,5 @@ def create_parser_and_parse_args(*cls,
     args, argv = parser.parse_known_args()
     if argv != [] and throw_on_unknown:
         raise ValueError(f'Unknown arguments: {argv}')
-    return from_parsed_args(cls, args) if len(cls) > 1 else from_parsed_args(cls, args)[0]
+    return from_parsed_args(cls, params_namespace=args) \
+        if len(cls) > 1 else from_parsed_args(cls, params_namespace=args)[0]

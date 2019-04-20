@@ -193,7 +193,7 @@ class EnumParam(BaseDescriptor):
         return instance.__dict__.get(self.name, self.default)
 
     def __set__(self, instance, value):
-        if value in self.cls:
+        if value is None or value in self.cls:
             instance.__dict__[self.name] = value
         elif value in self.cls.__members__:
             instance.__dict__[self.name] = self.cls[value]
@@ -226,8 +226,9 @@ class GeomspaceParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[np.ndarray]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
+        v = instance.__dict__.get(self.name, self.default)
+        if v is None or any([i is None for i in v]):
+            return v
         return convert_to_si_units(np.geomspace(*instance.__dict__.get(self.name, self.default)),
                                    self.unit)
 
@@ -255,8 +256,9 @@ class ArangeParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[np.ndarray]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
+        v = instance.__dict__.get(self.name, self.default)
+        if v is None or any([i is None for i in v]):
+            return v
         return convert_to_si_units(np.arange(*instance.__dict__.get(self.name, self.default)),
                                    self.unit)
 
@@ -269,8 +271,9 @@ class SpanArangeParam(ArangeParam):
     def __get__(self, instance, owner):
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
+        v = instance.__dict__.get(self.name, self.default)
+        if v is None or any([i is None for i in v]):
+            return v
         center, width, step = instance.__dict__.get(self.name, self.default)
         return convert_to_si_units(np.arange(center - 0.5 * width, center + 0.5 * width, step),
                                    self.unit)
@@ -295,8 +298,9 @@ class LinspaceParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[np.ndarray]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
+        v = instance.__dict__.get(self.name, self.default)
+        if v is None or any([i is None for i in v]):
+            return v
         return convert_to_si_units(np.linspace(*instance.__dict__.get(self.name, self.default)),
                                    self.unit)
 
