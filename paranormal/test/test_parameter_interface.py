@@ -212,3 +212,18 @@ def test_create_parser_and_parse_args():
                            [])
         y = create_parser_and_parse_args(PositionalsC)
     _compare_two_param_item_lists(y.items(), correct_items)
+
+    # test that nested classes work:
+    class YearlySchedule(Params):
+        winter = MyWinter()
+        summer = MySummer(f=None)
+
+    with mock.patch('paranormal.parameter_interface.ArgumentParser.parse_known_args') as pa:
+        pa.return_value = (Namespace(c='RED', do_something_crazy=False, dpw_s=None, dpw_w=None,
+                                     f=None, hib=True, s=22.0, s_num=15, s_start=20.0, s_stop=600.0,
+                                     t=60, w_num=15, w_start=20.0, w_stop=200.0), [])
+        y = create_parser_and_parse_args(YearlySchedule)
+    correct_items = [('winter', MyWinter(s=22, dpw_w=[20, 200, 15], hib=True)),
+                     ('summer', MySummer(c=Colors.RED, dpw_s=[20, 600, 15]))]
+    _compare_two_param_item_lists(y.items(), correct_items)
+
