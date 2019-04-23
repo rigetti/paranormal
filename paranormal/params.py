@@ -7,9 +7,6 @@ import numpy as np
 from paranormal.units import convert_to_si_units
 
 
-
-
-
 __all__ = ['BaseDescriptor', 'BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam',
            'SetParam', 'ArangeParam', 'EnumParam', 'GeomspaceParam', 'SpanArangeParam',
            'LinspaceParam']
