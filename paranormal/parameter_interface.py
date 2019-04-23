@@ -6,7 +6,7 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 import yaml
 
-from pampy import match, _
+from pampy import match
 
 from paranormal.params import *
 
