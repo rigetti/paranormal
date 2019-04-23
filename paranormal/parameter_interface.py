@@ -418,6 +418,54 @@ def _extract_expanded_param(parsed_values: dict,
     return start_stop_x_list
 
 
+def _resolve_flattened_classes(enclosing_cls_name: str,
+                               flattened_nested_params: Dict,
+                               enclosing_cls_params: Dict,
+                               fallback_to_prefix: bool) -> Dict:
+    """
+    We've flattened the nested class params, and now we have to resolve any conflicts between them
+    and the enclosing class
+    """
+    totally_flat_param_names = []
+    totally_flat_params = []
+    cls_names = []
+    for cls_name, flat_params in flattened_nested_params.items():
+        for n, p in flat_params.items():
+            totally_flat_params.append(p)
+            totally_flat_param_names.append(n)
+            cls_names.append(cls_name)
+
+    resolved_params = {}
+    copied_enclosing_params = copy.deepcopy(enclosing_cls_params)
+    for cls_name, n, p in zip(cls_names, totally_flat_param_names, totally_flat_params):
+        # conflict with the enclosing class
+        if n in enclosing_cls_params:
+            if getattr(enclosing_cls_params[n], 'override', False):
+                continue
+            elif fallback_to_prefix:
+                enclosing_prefix = getattr(enclosing_cls_params[n], 'prefix', '')
+                nested_prefix = getattr(p, 'prefix', '')
+                nested_prefix = cls_name if nested_prefix == '' and enclosing_prefix == '' else nested_prefix
+                resolved_params[nested_prefix + n] = p
+                resolved_params[enclosing_prefix + n] = enclosing_cls_params[n]
+                del copied_enclosing_params[n]
+            else:
+                raise KeyError(f'Unable to flatten {enclosing_cls_name} - '
+                               f'conflict with param: {n} - '
+                               f'use kwarg override=True to override nested params')
+        # conflict with another nested class
+        elif totally_flat_param_names.count(n) > 1:
+            if fallback_to_prefix:
+                prefix = p.prefix if hasattr(p, 'prefix') else cls_name
+                resolved_params[prefix + n] = p
+            else:
+                raise KeyError(f'Unable to flatten {enclosing_cls_name} - '
+                               f'conflict with param: {n} in nested classes')
+    # add all the enclosing class params
+    resolved_params.update(copied_enclosing_params)
+    return resolved_params
+
+
 def _flatten_cls_params(cls: type(Params)) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
