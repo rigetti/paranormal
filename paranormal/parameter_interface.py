@@ -193,7 +193,8 @@ def _merge_param_classes(params_cls_list = List[type(Params)],
                     raise ValueError(f'Unable to merge classes {params_cls_list} due to conflicting'
                                      f'param: {k}')
                 setattr(MergedParams, k, v)
-                v.__set_name__(MergedParams, k)
+                if isinstance(v, BaseDescriptor):
+                    v.__set_name__(MergedParams, k)
         MergedParams.__doc__ += f'\n\t {params_cls.__name__} - {params_cls.__doc__}'
 
     # resolve positional arguments:
