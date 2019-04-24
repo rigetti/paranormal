@@ -70,6 +70,23 @@ class PositionalsB(Params):
     b = IntParam(help='an int')
 
 
+class FreqSweep(Params):
+    freqs = LinspaceParam(help='freqs', expand=True, default=[10, 20, 30], unit='MHz',
+                          prefix='f_')
+    times = LinspaceParam(help='times', expand=True, default=[100, 200, 50], unit='us',
+                          prefix='t_')
+
+
+class TimeSweep(Params):
+    times = LinspaceParam(help='times', expand=True, default=[100, 500, 20], unit='ns',
+                          prefix='t_')
+
+
+class DoubleSweep(Params):
+    freq_sweep = FreqSweep()
+    time_sweep = TimeSweep()
+
+
 def _compare_two_param_item_lists(a, b):
     for (k, v), (k_cor, v_cor) in zip(a, b):
         assert k == k_cor
@@ -157,8 +174,28 @@ def test_to_argparse():
         summer = MySummer(f=360)
         spring = MySpring()
 
-    with pytest.raises(KeyError):
-        to_argparse(YearlySchedule)
+    to_argparse(YearlySchedule)
+    args = parser.parse_args([])
+    assert args == Namespace(c=Colors.BLUE, do_something_crazy=False, dpw_s=None, dpw_w=None,
+                             f=None, hib=False, s=12, s_num=15, s_start=0, s_stop=None, t=60,
+                             w_num=15, w_start=0, w_stop=None)
+
+
+    # Make sure conflicting params are resolved
+    parser = to_argparse(DoubleSweep)
+    args = parser.parse_args([])
+    assert args == Namespace(f_num=30, f_start=10, f_stop=20, freq_sweep_t_num=50,
+                             freq_sweep_t_start=100, freq_sweep_t_stop=200, freq_sweep_times=None,
+                             freqs=None, time_sweep_t_num=20, time_sweep_t_start=100,
+                             time_sweep_t_stop=500, time_sweep_times=None)
+
+    # make sure check that requires prefixes if expand=True for multiple classes is working
+    class BadFreqSweep(Params):
+        freqs = LinspaceParam(help='freqs', expand=True)
+        times = LinspaceParam(help='times', expand=True)
+
+    with pytest.raises(ValueError):
+        to_argparse(BadFreqSweep)
 
 
 def test_from_parsed_args():
@@ -196,6 +233,21 @@ def test_from_parsed_args():
     y = from_parsed_args(PositionalsC, params_namespace=args)[0]
     correct_items = [('a_pos', PositionalsA(x=1.0, z=[0.0, 1.0, 22.0], y='hey')),
                      ('b_pos', PositionalsB(a=1, b=10))]
+    _compare_two_param_item_lists(y.items(), correct_items)
+
+    parser = to_argparse(DoubleSweep)
+
+    # make sure if you pass an expanded param, an error is thrown
+    with pytest.raises(AssertionError):
+        args = parser.parse_args([])
+        setattr(args, 'freq_sweep_times', [0, 100, 200])
+        from_parsed_args(DoubleSweep, params_namespace=args)
+
+    args = parser.parse_args(
+        '--time_sweep_t_start 20 --time_sweep_t_stop 30 --f_stop 40'.split(' '))
+    y = from_parsed_args(DoubleSweep, params_namespace=args)[0]
+    correct_items = [('freq_sweep', FreqSweep(freqs=[10, 40.0, 30])),
+                     ('time_sweep', TimeSweep(times=[20, 30, 20]))]
     _compare_two_param_item_lists(y.items(), correct_items)
 
 
