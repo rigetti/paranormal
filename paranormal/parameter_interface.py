@@ -41,6 +41,7 @@ class Params(Mapping):
                 raise KeyError(f'{cls.__name__} does not take {key} as an argument')
             setattr(self, key, value)
         _check_for_required_arguments(cls, kwargs)
+        _ensure_properties_are_working(self)
 
     def __iter__(self):
         valid_keys = [k for k in self.__class__.__dict__.keys() if not k.startswith('_')]
@@ -71,6 +72,15 @@ def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
     if required_but_not_provided != []:
         raise KeyError(f'{required_but_not_provided} are required arguments to instantiate '
                        f'{cls.__name__}')
+
+
+def _ensure_properties_are_working(params: Params) -> None:
+    """
+    Evaluate the properties within a class to make sure they work based on the attributes
+    """
+    for k, v in params.items():
+        if isinstance(v, property):
+            getattr(params, k)
 
 
 def to_json_serializable_dict(params: Params, include_defaults: bool = True) -> dict:
