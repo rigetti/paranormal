@@ -53,7 +53,7 @@ class Params(Mapping):
     def __getitem__(self, item):
         return getattr(self, item)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return to_json_serializable_dict(self) == to_json_serializable_dict(other)
 
 
@@ -76,6 +76,11 @@ def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
 def to_json_serializable_dict(params: Params, include_defaults: bool = True) -> dict:
     """
     Convert Params class to a json serializable dictionary
+
+    :param params: Params class to convert
+    :param include_defaults: Whether or not to include the param attribute default values if the
+        values haven't been set yet
+    :return A dictionary that's json serializable
     """
     retval = {}
     for k, v in type(params).__dict__.items():
@@ -92,6 +97,10 @@ def to_json_serializable_dict(params: Params, include_defaults: bool = True) -> 
 def from_json_serializable_dict(dictionary: dict) -> Params:
     """
     Convert from a json serializable dictionary to a Params class
+
+    :param dictionary: a dictionary in the format returned by to_json_serializable_dict to convert
+        back to a Params class
+    :return The Params class
     """
     temp_dictionary = copy.deepcopy(dictionary)
     try:
@@ -133,6 +142,11 @@ def _merge_positional_params(params_list: List[Tuple[str, BaseDescriptor]]
     """
     Merge positional params into a single list param and return a list of param names that were
     merged
+
+    :param params_list: List of params (name, Param) to search through for positional params. If
+        multiple positional params are found, they will be merged into a single positional
+        ListParam.
+    :return The positional param names in the list, the merged ListParam
     """
     if not sum([getattr(p, 'positional', False) for (_, p) in params_list]) > 1:
         return [], None
@@ -149,7 +163,12 @@ def _merge_positional_params(params_list: List[Tuple[str, BaseDescriptor]]
 def _merge_param_classes(params_cls_list = List[type(Params)],
                          merge_positional_params: bool = True) -> type(Params):
     """
-    Merge multiple Params classes into a single merged params class and return the merged class
+    Merge multiple Params classes into a single merged params class and return the merged class.
+    Note that this will not flatten the nested classes.
+
+    :param params_cls_list: A list of Params subclasses or classes to merge into a single
+        Params class
+    :param merge_positional_params: Whether or not to merge the positional params in the classes
     """
     if len(params_cls_list) == 1:
         return params_cls_list[0]
@@ -216,6 +235,10 @@ def _parse_positional_arguments(list_of_positionals: List[str],
     If params have been merged together, their positional arguments will have been merged as well
     into one single ListParam. This function's job is to pair the positionals with their respective
     unmerged param classes.
+
+    :param list_of_positionals: A list of the positional arguments from the command line arguments
+    :param positional_params: The positional parameters to match the positionals to
+    :return: A dictionary that maps param name to its correct value in the positionals list
     """
     if list_of_positionals is None and positional_params != {}:
         raise ValueError('No positional arguments were returned from the parser')
@@ -291,6 +314,10 @@ def _parse_positional_arguments(list_of_positionals: List[str],
 def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParser) -> None:
     """
     Function to add a Param like IntParam, FloatParam, etc. called <name> to a parser
+
+    :param name: The param name
+    :param param: The param to add (IntParam, FloatParam, etc.)
+    :param parser: The argument parser to add the param to.
     """
     argtype = _get_param_type(param)
     if argtype == type(None):
@@ -340,6 +367,8 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
 def _expand_param_name(param: BaseDescriptor) -> List[str]:
     """
     Get expanded param names
+
+    :param param: The param to expand
     """
     if not getattr(param, 'expand', False):
         raise ValueError('Cannot expand param that does not have the expand kwarg')
@@ -357,6 +386,9 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
     """
     Expand a parameter like GeomspaceParam or ArangeParam into seperate IntParams and FloatParams to
     parse as '--start X --stop X --num X' or '--start X --stop X --step X', etc.
+
+    :param name: The param name
+    :param param: The param to expand
     """
     new_arg_names = _expand_param_name(param)
     if getattr(param, 'positional', False):
@@ -409,6 +441,14 @@ def _extract_expanded_param(parsed_values: dict,
     """
     Convert [start, stop, num] or [start, stop, step], etc. from expanded form back into a list to
     be easily fed into the un-expanded param
+
+    :param parsed_values: The parsed values from the command line as a dictionary (comes directly
+        from the namespace)
+    :param name: Original name of the param that was expanded (may have a prefix)
+    :param param: The param that was expanded
+    :param enclosing_param_name: If the param is a nested param, there's a chance we had to append
+        the enclosing class name as a prefix to deconflict arguments with the same name. See
+        _create_param_name_variant docstring for more info.
     """
     old_arg_names = _expand_param_name(param)
     if enclosing_param_name is not None:
@@ -421,11 +461,32 @@ def _extract_expanded_param(parsed_values: dict,
     return start_stop_x_list
 
 
-def _create_param_name_variant(nested_param_name: str, enclosing_param_cls_name: str) -> str:
+def _create_param_name_variant(nested_param_name: str, enclosing_param_name: str) -> str:
     """
     Create a param name variant to de-conflict conflicting params
+
+    :param nested_param_name: The param name (part of a nested param class) that has a conflict with
+        another nested param name
+    :param enclosing_param_name: The name of the enclosing class's parameter
+
+    Ex.
+    ```
+    class A(Params):
+        x = LinspaceParam(expand=True, ...)
+
+    class B(Params):
+        x = LinspaceParam(expand=True, ...)
+
+    class C(Params):
+        a = A()
+        b = B()
+    ```
+    will result in a_start, a_stop, a_num, b_start, b_stop, and b_num as command line parameters
+    because there's a conflict with x in both A and B.
+
+    The enclosing param names for x are "a" and "b" in this example.
     """
-    return enclosing_param_cls_name + '_' + nested_param_name
+    return enclosing_param_name + '_' + nested_param_name
 
 
 def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> Dict:
@@ -433,21 +494,23 @@ def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> D
     Extract params from a Params class - Behavior is as follows:
 
     1. Params with names starting in _ will be ignored
-    2. Derived params will be ignored
-    3. If the class contains nested params classes, those will be flattened. Params with the same
-        name in the encompassing class will overwrite the nested ones if overwrite is specified
-        Otherwise, an error will be thrown.
-    4. Multiple positional params will be merged after flattening
+    2. Properties will be ignored
+    3. If the class contains nested params classes, those will be flattened.
+    4. If there are any name conflicts during flattening, those will be resolved by appending the
+        enclosing param names as prefixes if fallback_to_prefix is True.
+        See _create_param_name_variant docstring for more details
     """
     flattened_params = {}
     nested_class_params = defaultdict(list)
     nested_class_conflicts = set()
-    # loop through and all the nested params first
     already_flat_params = {}
     for name, param in vars(cls).items():
+        # ignore params that start with _
         if name.startswith('_'):
             continue
+        # if we have an actual param
         elif isinstance(param, BaseDescriptor):
+            # if the param is supposed to be expanded, then expand it
             if getattr(param, 'expand', False):
                 expanded = _expand_multi_arg_param(name, param)
                 if any(n in already_flat_params for (n, _) in expanded):
@@ -456,12 +519,14 @@ def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> D
                 already_flat_params.update(dict(expanded))
             else:
                 already_flat_params[name] = param
+        # if the param is a nested param class
         elif isinstance(param, Params):
             for n, p in _flatten_cls_params(type(param)).items():
                 nested_class_params[name].append((n, p))
                 if n in flattened_params:
                     nested_class_conflicts.add(n)
                 flattened_params[n] = p
+        # ignore properties
         elif isinstance(param, property):
             continue
         else:
@@ -489,7 +554,7 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     """
     parser = ArgumentParser(description=cls.__doc__, **kwargs)
 
-    # first, we flatten the cls params (means flattening any nested Params classes
+    # first, we flatten the cls params (means flattening any nested Params classes)
     flattened_params = _flatten_cls_params(cls)
 
     # merge any positional arguments
@@ -499,6 +564,7 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     if positional_param is not None:
         flattened_params['positionals'] = positional_param
 
+    # actually add the params to the argument parser
     for name, param in flattened_params.items():
         _add_param_to_parser(name, param, parser)
 
@@ -511,7 +577,14 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
 def _unflatten_params_cls(cls: type(Params), parsed_params: dict,
                           enclosing_param_name: str = '') -> Params:
     """
-    Recursively construct a Params class or subclass (handles nested Params classes)
+    Recursively construct a Params class or subclass (handles nested Params classes) using values
+    parsed from the command line.
+
+    :param cls: The Params class to create an instance of
+    :param parsed_params: The params parsed from the command line
+    :param enclosing_param_name: Name of the enclosing param. See _create_param_name_variant
+        docstring for more details
+    :return: An instance of cls with params set from the parsed params dictionary
     """
     cls_specific_params = {}
     for k, v in cls.__dict__.items():
@@ -521,9 +594,9 @@ def _unflatten_params_cls(cls: type(Params), parsed_params: dict,
             param_name = _create_param_name_variant(k, enclosing_param_name) \
                 if k not in parsed_params else k
             if getattr(v, 'expand', False):
-                cls_specific_params.update({k: _extract_expanded_param(
-                    parsed_params, param_name, v,
-                    enclosing_param_name if k != param_name else None)})
+                unexpanded_param = _extract_expanded_param(
+                    parsed_params, param_name, v, enclosing_param_name if k != param_name else None)
+                cls_specific_params.update({k: unexpanded_param})
             else:
                 cls_specific_params[k] = parsed_params[param_name]
         elif isinstance(v, Params):
