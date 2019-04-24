@@ -422,10 +422,10 @@ def _create_param_name_variant(nested_param_name: str, enclosing_param_cls_name:
     """
     Create a param name variant to de-conflict conflicting params
     """
-    return nested_param_name + '_' + enclosing_param_cls_name
+    return enclosing_param_cls_name + '_' + nested_param_name
 
 
-def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = False) -> Dict:
+def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
 
@@ -470,8 +470,10 @@ def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = False) -> 
             if n in nested_class_conflicts or n in already_flat_params:
                 if not fallback_to_prefix:
                     raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
-                del flattened_params[n]
                 flattened_params[_create_param_name_variant(n, cls_name)] = p
+
+    for n in nested_class_conflicts:
+        del flattened_params[n]
 
     flattened_params.update(already_flat_params)
 
