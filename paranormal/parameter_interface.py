@@ -418,55 +418,14 @@ def _extract_expanded_param(parsed_values: dict,
     return start_stop_x_list
 
 
-def _resolve_flattened_classes(enclosing_cls_name: str,
-                               flattened_nested_params: Dict,
-                               enclosing_cls_params: Dict,
-                               fallback_to_prefix: bool) -> Dict:
+def _create_param_name_variant(nested_param_name: str, enclosing_param_cls_name: str) -> str:
     """
-    We've flattened the nested class params, and now we have to resolve any conflicts between them
-    and the enclosing class
+    Create a param name variant to de-conflict conflicting params
     """
-    totally_flat_param_names = []
-    totally_flat_params = []
-    cls_names = []
-    for cls_name, flat_params in flattened_nested_params.items():
-        for n, p in flat_params.items():
-            totally_flat_params.append(p)
-            totally_flat_param_names.append(n)
-            cls_names.append(cls_name)
-
-    resolved_params = {}
-    copied_enclosing_params = copy.deepcopy(enclosing_cls_params)
-    for cls_name, n, p in zip(cls_names, totally_flat_param_names, totally_flat_params):
-        # conflict with the enclosing class
-        if n in enclosing_cls_params:
-            if getattr(enclosing_cls_params[n], 'override', False):
-                continue
-            elif fallback_to_prefix:
-                enclosing_prefix = getattr(enclosing_cls_params[n], 'prefix', '')
-                nested_prefix = getattr(p, 'prefix', '')
-                nested_prefix = cls_name if nested_prefix == '' and enclosing_prefix == '' else nested_prefix
-                resolved_params[nested_prefix + n] = p
-                resolved_params[enclosing_prefix + n] = enclosing_cls_params[n]
-                del copied_enclosing_params[n]
-            else:
-                raise KeyError(f'Unable to flatten {enclosing_cls_name} - '
-                               f'conflict with param: {n} - '
-                               f'use kwarg override=True to override nested params')
-        # conflict with another nested class
-        elif totally_flat_param_names.count(n) > 1:
-            if fallback_to_prefix:
-                prefix = p.prefix if hasattr(p, 'prefix') else cls_name
-                resolved_params[prefix + n] = p
-            else:
-                raise KeyError(f'Unable to flatten {enclosing_cls_name} - '
-                               f'conflict with param: {n} in nested classes')
-    # add all the enclosing class params
-    resolved_params.update(copied_enclosing_params)
-    return resolved_params
+    return nested_param_name + '_' + enclosing_param_cls_name
 
 
-def _flatten_cls_params(cls: type(Params)) -> Dict:
+def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = False) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
 
@@ -478,30 +437,43 @@ def _flatten_cls_params(cls: type(Params)) -> Dict:
     4. Multiple positional params will be merged after flattening
     """
     flattened_params = {}
+    nested_class_params = defaultdict(list)
+    nested_class_conflicts = set()
     # loop through and all the nested params first
     already_flat_params = {}
     for name, param in vars(cls).items():
         if name.startswith('_'):
             continue
         elif isinstance(param, BaseDescriptor):
-            if name in already_flat_params:
-                raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {name}')
-            already_flat_params[name] = param
+            if getattr(param, 'expand', False):
+                expanded = _expand_multi_arg_param(name, param)
+                if any(n in already_flat_params for (n, _) in expanded):
+                    raise ValueError('Please provide prefixes for the expanded params - conflict '
+                                     f'with param: {name}')
+                already_flat_params.update(dict(expanded))
+            else:
+                already_flat_params[name] = param
         elif isinstance(param, Params):
             for n, p in _flatten_cls_params(type(param)).items():
+                nested_class_params[name].append((n, p))
                 if n in flattened_params:
-                    raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
+                    nested_class_conflicts.add(n)
                 flattened_params[n] = p
         elif isinstance(param, property):
             continue
         else:
             raise ValueError(f'Param: {name} of type {type(param)} is not recognized!')
 
-    for name, param in already_flat_params.items():
-        if name in flattened_params and not getattr(param, 'override', False):
-            raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {name} - use'
-                           f' kwarg override=True to override nested params')
-        flattened_params[name] = param
+    # resolve nested class conflicts
+    for cls_name, param_names in nested_class_params.items():
+        for n, p in param_names:
+            if n in nested_class_conflicts or n in already_flat_params:
+                if not fallback_to_prefix:
+                    raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
+                del flattened_params[n]
+                flattened_params[_create_param_name_variant(n, cls_name)] = p
+
+    flattened_params.update(already_flat_params)
 
     return flattened_params
 
@@ -522,28 +494,17 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     if positional_param is not None:
         flattened_params['positionals'] = positional_param
 
-    # Check if multiple params are to be expanded. If so, we need a prefix on each of the expanded
-    # names to avoid conflict
-    if sum(getattr(p, 'expand', False) for p in flattened_params.values()) > 1:
-        for p in flattened_params.values():
-            assert not (getattr(p, 'expand', False) ^ (getattr(p, 'prefix', '') != ''))
-
     for name, param in flattened_params.items():
-        if getattr(param, 'expand', False):
-            for (n, p) in _expand_multi_arg_param(name, param):
-                _add_param_to_parser(n, p, parser)
-        else:
-            _add_param_to_parser(name, param, parser)
+        _add_param_to_parser(name, param, parser)
 
     assert sum(getattr(p, 'nargs', '') not in ['+', '*', '?'] for p in vars(cls).values()
                if getattr(p, 'positional', False)) <= 1, \
         'Behavior is undefined for multiple positional arguments with nargs=+|*|?'
-    assert sum(getattr(p, 'expand', False) for p in vars(cls).values()) <= 1, \
-        'Cannot expand multiple params into (start, stop, ...) for use in the same parser'
     return parser
 
 
-def _unflatten_params_cls(cls: type(Params), parsed_params: dict) -> Params:
+def _unflatten_params_cls(cls: type(Params), parsed_params: dict,
+                          enclosing_param_name: str = '') -> Params:
     """
     Recursively construct a Params class or subclass (handles nested Params classes)
     """
@@ -551,10 +512,14 @@ def _unflatten_params_cls(cls: type(Params), parsed_params: dict) -> Params:
     for k, v in cls.__dict__.items():
         if k.startswith('_'):
             continue
-        elif isinstance(v, BaseDescriptor) and k in parsed_params:
-            cls_specific_params[k] = parsed_params[k]
+        elif isinstance(v, BaseDescriptor):
+            if k in parsed_params:
+                cls_specific_params[k] = parsed_params[k]
+            elif _create_param_name_variant(k, enclosing_param_name) in k:
+                cls_specific_params[k] = _create_param_name_variant(k, enclosing_param_name)
         elif isinstance(v, Params):
-            cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params)
+            cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
+                                                           enclosing_param_name=k)
     return cls(**cls_specific_params)
 
 
