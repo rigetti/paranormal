@@ -404,14 +404,17 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
 
 def _extract_expanded_param(parsed_values: dict,
                             name: str,
-                            param: BaseDescriptor) -> Optional[List]:
+                            param: BaseDescriptor,
+                            enclosing_param_name: Optional[str] = None) -> Optional[List]:
     """
     Convert [start, stop, num] or [start, stop, step], etc. from expanded form back into a list to
     be easily fed into the un-expanded param
     """
     old_arg_names = _expand_param_name(param)
-    assert parsed_values.get(name) is None, \
-        f'{name} was expanded. Please provide {old_arg_names} instead'
+    if enclosing_param_name is not None:
+        old_arg_names = [_create_param_name_variant(n, enclosing_param_name) for n in old_arg_names]
+    assert parsed_values.get(name) is None, f'param {name} was expanded! ' \
+                                            f'Please provide {old_arg_names} instead'
     start_stop_x_list = [parsed_values[n] for n in old_arg_names]
     if all([x is None for x in start_stop_x_list]):
         return None
@@ -515,10 +518,14 @@ def _unflatten_params_cls(cls: type(Params), parsed_params: dict,
         if k.startswith('_'):
             continue
         elif isinstance(v, BaseDescriptor):
-            if k in parsed_params:
-                cls_specific_params[k] = parsed_params[k]
-            elif _create_param_name_variant(k, enclosing_param_name) in k:
-                cls_specific_params[k] = _create_param_name_variant(k, enclosing_param_name)
+            param_name = _create_param_name_variant(k, enclosing_param_name) \
+                if k not in parsed_params else k
+            if getattr(v, 'expand', False):
+                cls_specific_params.update({k: _extract_expanded_param(
+                    parsed_params, param_name, v,
+                    enclosing_param_name if k != param_name else None)})
+            else:
+                cls_specific_params[k] = parsed_params[param_name]
         elif isinstance(v, Params):
             cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
                                                            enclosing_param_name=k)
@@ -530,7 +537,6 @@ def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple:
     Convert a list of params classes and an argparse parsed namespace to a list of class instances
     """
     params = vars(params_namespace)
-
     flattened_classes = [_flatten_cls_params(cls) for cls in cls_list]
     # handle positional arguments
     positional_params = {}
@@ -543,13 +549,6 @@ def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple:
         matched_pos_args = _parse_positional_arguments(parsed_positionals,
                                                        positional_params)
         params.update(matched_pos_args)
-
-    # handle expanded params
-    expanded_params = {}
-    for flattened_cls in flattened_classes:
-        expanded_params.update({k: _extract_expanded_param(params, k, v)
-                                for k, v in flattened_cls.items() if getattr(v, 'expand', False)})
-    params.update(expanded_params)
 
     # actually construct the params classes
     return tuple(_unflatten_params_cls(cls, params) for cls in cls_list)

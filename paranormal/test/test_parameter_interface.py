@@ -235,11 +235,19 @@ def test_from_parsed_args():
                      ('b_pos', PositionalsB(a=1, b=10))]
     _compare_two_param_item_lists(y.items(), correct_items)
 
-
     parser = to_argparse(DoubleSweep)
-    args = parser.parse_args([])
+
+    # make sure if you pass an expanded param, an error is thrown
+    with pytest.raises(AssertionError):
+        args = parser.parse_args([])
+        setattr(args, 'freq_sweep_times', [0, 100, 200])
+        from_parsed_args(DoubleSweep, params_namespace=args)
+
+    args = parser.parse_args(
+        '--time_sweep_t_start 20 --time_sweep_t_stop 30 --f_stop 40'.split(' '))
     y = from_parsed_args(DoubleSweep, params_namespace=args)[0]
-    correct_items = []
+    correct_items = [('freq_sweep', FreqSweep(freqs=[10, 40.0, 30])),
+                     ('time_sweep', TimeSweep(times=[20, 30, 20]))]
     _compare_two_param_item_lists(y.items(), correct_items)
 
 
