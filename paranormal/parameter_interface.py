@@ -12,7 +12,8 @@ from paranormal.params import *
 
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
-           'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args']
+           'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args',
+           'get_param_unit']
 
 
 ####################
@@ -56,6 +57,13 @@ class Params(Mapping):
 
     def __eq__(self, other) -> bool:
         return to_json_serializable_dict(self) == to_json_serializable_dict(other)
+
+
+def get_param_unit(cls: type(Params), param_name: str) -> str:
+    """
+    Get the unit of a param
+    """
+    return getattr(cls.__dict__.get(param_name), 'unit', None)
 
 
 def _check_for_required_arguments(cls: type(Params), kwargs: dict) -> None:
