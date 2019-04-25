@@ -3,6 +3,7 @@ from enum import Enum
 import json
 import mock
 import pytest
+import tempfile
 
 import numpy as np
 
@@ -135,6 +136,27 @@ def test_json_serialization():
 
     j = json.loads(json.dumps(to_json_serializable_dict(p, include_defaults=False)))
     assert p == from_json_serializable_dict(j)
+
+
+def test_yaml_serialization():
+    p = P(r=10)
+    temp = tempfile.NamedTemporaryFile(delete=False, mode='w+t')
+    with mock.patch('paranormal.parameter_interface.open') as o:
+        o.return_value = temp
+        to_yaml_file(p, 'mock.yaml', include_defaults=True)
+    with open(temp.name) as yaml_file:
+        assert yaml_file.read() == 'b: true\ni: 1\nf: 0.5\nr: 10\ne: X\nl:\n- 0\n- 1\n- 2\na:\n- ' \
+                                   '0\n- 100\n- 5\n_type: P\n_module: test_parameter_interface\n'
+
+    # test yaml dumping with alphabetical reorder
+    p = P(r=10)
+    temp = tempfile.NamedTemporaryFile(delete=False, mode='w+t')
+    with mock.patch('paranormal.parameter_interface.open') as o:
+        o.return_value = temp
+        to_yaml_file(p, 'mock.yaml', include_defaults=True, sort_keys=True)
+    with open(temp.name) as yaml_file:
+        assert yaml_file.read() == '_module: test_parameter_interface\n_type: P\na:\n- 0\n- 100' \
+                                   '\n- 5\nb: true\ne: X\nf: 0.5\ni: 1\nl:\n- 0\n- 1\n- 2\nr: 10\n'
 
 
 def test_to_argparse():
