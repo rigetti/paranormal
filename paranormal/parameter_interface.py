@@ -133,12 +133,24 @@ def from_json_serializable_dict(dictionary: dict) -> Params:
     return cls(**unraveled_dictionary)
 
 
-def to_yaml_file(params: Params, filename: str, include_defaults: bool=False):
+def to_yaml_file(params: Params,
+                 filename: str,
+                 *,
+                 include_defaults: bool=False,
+                 include_hidden_params: bool = False,
+                 preserve_order: bool = True):
     """
     Dump to yaml
     """
+    d = to_json_serializable_dict(params, include_defaults=include_defaults,
+                                  include_hidden_params=include_hidden_params)
+    if preserve_order:
+        yaml.add_representer(
+            dict, lambda s, d: yaml.representer.SafeRepresenter.represent_dict(s, d.items()))
+
     with open(filename, 'w') as f:
-        yaml.dump(to_json_serializable_dict(params, include_defaults=include_defaults), stream=f)
+        yaml.dump(d, stream=f)
+
 
 def from_yaml_file(filename: str) -> Params:
     """
