@@ -83,18 +83,21 @@ def _ensure_properties_are_working(params: Params) -> None:
             getattr(params, k)
 
 
-def to_json_serializable_dict(params: Params, include_defaults: bool = True) -> dict:
+def to_json_serializable_dict(params: Params, include_defaults: bool = True,
+                              include_hidden_params: bool = False) -> dict:
     """
     Convert Params class to a json serializable dictionary
 
     :param params: Params class to convert
     :param include_defaults: Whether or not to include the param attribute default values if the
         values haven't been set yet
+    :param include_hidden_params: Whether or not to include params that start with _
     :return A dictionary that's json serializable
     """
     retval = {}
     for k, v in type(params).__dict__.items():
-        if not k.startswith('_') and (include_defaults or k in params.__dict__):
+        if ((not k.startswith('_') or include_hidden_params) and
+                (include_defaults or k in params.__dict__)):
             if isinstance(v, BaseDescriptor):
                 retval[k] = v.to_json(params)
             elif isinstance(v, Params):
@@ -123,11 +126,10 @@ def from_json_serializable_dict(dictionary: dict) -> Params:
     # handle case with nested params
     unraveled_dictionary = {}
     for k, v in cls.__dict__.items():
-        if not k.startswith('_'):
-            if isinstance(v, BaseDescriptor) and k in temp_dictionary:
-                unraveled_dictionary[k] = temp_dictionary[k]
-            elif isinstance(v, Params):
-                unraveled_dictionary[k] = from_json_serializable_dict(temp_dictionary[k])
+        if isinstance(v, BaseDescriptor) and k in temp_dictionary:
+            unraveled_dictionary[k] = temp_dictionary[k]
+        elif isinstance(v, Params):
+            unraveled_dictionary[k] = from_json_serializable_dict(temp_dictionary[k])
     return cls(**unraveled_dictionary)
 
 
