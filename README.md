@@ -16,7 +16,7 @@ The following code samples show how this library is meant to be used.
 
 ### Subclass `Params`
 
-```
+```python
 from paranormal.parameter_interface import *
 from paranormal.params import *
 
@@ -36,7 +36,7 @@ class FrequencySweep(Params):
 
 ### Reading From the Command Line
 
-```
+```python
 parser = to_argparse(FrequencySweep)
 # argparse will grab the command line arguments
 # Ex command line: '--freqs 150 100 2 --power -40 --pulse_samples 200 --is_test'
@@ -48,7 +48,7 @@ sweep_params = create_parser_and_parse_args(FrequencySweep)
 ```
 
 ### Setting and getting parameters
-```
+```python
 print(sweep_params.freqs)  # prints a numpy array of size (20,) array([0.0e+00, 1.0e+08, 2.0e+08, …
 sweep_params.freqs = [5, 10, 5]
 print(sweep_params.freqs)  # prints array([0.e+00, 2.e+09, 4.e+09, 6.e+09, 8.e+09])
@@ -57,7 +57,7 @@ print(sweep_params.is_test)  # prints True
 
 ### JSON and YAML serialization
 
-```
+```python
 import json
 import yaml  # pyyaml
 
@@ -71,7 +71,7 @@ sweep_params = from_yaml_file('test_params.yaml')
 ```
 
 ### Nested Params
-```
+```python
 class MultipleFreqSweeps(Params):
     sweep_1 = FrequencySweep(freqs=[0, 1, 100])
     sweep_2 = FrequencySweep(freqs=[1, 2, 100])
