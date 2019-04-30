@@ -37,6 +37,9 @@ class Params(Mapping):
     """
     def __init__(self, **kwargs):
         cls = type(self)
+        if cls not in Params.__subclasses__():
+            raise NotImplementedError('Behavior is undefined for classes that do not directly '
+                                      'inherit from Params.')
         for key, value in kwargs.items():
             if not key in cls.__dict__:
                 raise KeyError(f'{cls.__name__} does not take {key} as an argument')
