@@ -186,10 +186,13 @@ def test_to_argparse():
 
     parser = to_argparse(YearlySchedule)
     args = parser.parse_args(
-        '--c RED --s 22 --s_start 20 --s_stop 600 --w_start 20 --w_stop 200 --hib'.split(' '))
-    assert args == Namespace(c='RED', do_something_crazy=False, dpw_s=None, dpw_w=None, f=None,
-                             hib=True, s=22.0, s_num=15, s_start=20.0, s_stop=600.0, t=60,
-                             w_num=15, w_start=20.0, w_stop=200.0)
+        '--summer_c RED --winter_s 22 --summer_s_start 20 --summer_s_stop 600 --winter_w_start 20 '
+        '--winter_w_stop 200 --winter_hib'.split(' '))
+    assert args == Namespace(summer_c='RED', summer_do_something_crazy=False, summer_dpw_s=None,
+                             summer_f=None, summer_s_num=15, summer_s_start=20.0,
+                             summer_s_stop=600.0, summer_t=60, winter_dpw_w=None, winter_hib=True,
+                             winter_s=22.0, winter_w_num=15, winter_w_start=20.0,
+                             winter_w_stop=200.0)
 
     class YearlySchedule(Params):
         winter = MyWinter()
@@ -198,18 +201,19 @@ def test_to_argparse():
 
     to_argparse(YearlySchedule)
     args = parser.parse_args([])
-    assert args == Namespace(c=Colors.BLUE, do_something_crazy=False, dpw_s=None, dpw_w=None,
-                             f=None, hib=False, s=12, s_num=15, s_start=0, s_stop=None, t=60,
-                             w_num=15, w_start=0, w_stop=None)
+    assert args == Namespace(summer_c=Colors.BLUE, summer_do_something_crazy=False,
+                             summer_dpw_s=None, summer_f=None, summer_s_num=15, summer_s_start=0,
+                             summer_s_stop=None, summer_t=60, winter_dpw_w=None, winter_hib=False,
+                             winter_s=12, winter_w_num=15, winter_w_start=0, winter_w_stop=None)
 
 
     # Make sure conflicting params are resolved
     parser = to_argparse(DoubleSweep)
     args = parser.parse_args([])
-    assert args == Namespace(f_num=30, f_start=10, f_stop=20, freq_sweep_t_num=50,
-                             freq_sweep_t_start=100, freq_sweep_t_stop=200, freq_sweep_times=None,
-                             freqs=None, time_sweep_t_num=20, time_sweep_t_start=100,
-                             time_sweep_t_stop=500, time_sweep_times=None)
+    assert args == Namespace(freq_sweep_f_num=30, freq_sweep_f_start=10, freq_sweep_f_stop=20,
+                             freq_sweep_freqs=None, freq_sweep_t_num=50, freq_sweep_t_start=100,
+                             freq_sweep_t_stop=200, freq_sweep_times=None, time_sweep_t_num=20,
+                             time_sweep_t_start=100, time_sweep_t_stop=500, time_sweep_times=None)
 
     # make sure check that requires prefixes if expand=True for multiple classes is working
     class BadFreqSweep(Params):
@@ -221,6 +225,7 @@ def test_to_argparse():
 
 
 def test_from_parsed_args():
+
     parser = to_argparse(MyWinter)
     y = from_parsed_args(MyWinter, params_namespace=parser.parse_args([]))[0]
     correct_items = [('s', 12), ('hib', False), ('dpw_w', [0, None, 15])]
@@ -238,7 +243,8 @@ def test_from_parsed_args():
     # test that nested classes work
     parser = to_argparse(YearlySchedule)
     args = parser.parse_args(
-        '--c RED --s 22 --s_start 20 --s_stop 600 --w_start 20 --w_stop 200 --hib'.split(' '))
+        '--summer_c RED --winter_s 22 --summer_s_start 20 --summer_s_stop 600 --winter_w_start 20 '
+        '--winter_w_stop 200 --winter_hib'.split(' '))
     y = from_parsed_args(YearlySchedule, params_namespace=args)[0]
     correct_items = [('winter', MyWinter(s=22, dpw_w=[20, 200, 15], hib=True)),
                      ('summer', MySummer(c=Colors.RED, dpw_s=[20, 600, 15]))]
@@ -266,7 +272,7 @@ def test_from_parsed_args():
         from_parsed_args(DoubleSweep, params_namespace=args)
 
     args = parser.parse_args(
-        '--time_sweep_t_start 20 --time_sweep_t_stop 30 --f_stop 40'.split(' '))
+        '--time_sweep_t_start 20 --time_sweep_t_stop 30 --freq_sweep_f_stop 40'.split(' '))
     y = from_parsed_args(DoubleSweep, params_namespace=args)[0]
     correct_items = [('freq_sweep', FreqSweep(freqs=[10, 40.0, 30])),
                      ('time_sweep', TimeSweep(times=[20, 30, 20]))]

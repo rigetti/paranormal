@@ -528,20 +528,19 @@ def _create_param_name_variant(nested_param_name: str, enclosing_param_name: str
     return enclosing_param_name + '_' + nested_param_name
 
 
-def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> Dict:
+def _flatten_cls_params(cls: type(Params), use_prefix: bool = True) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
 
     1. Params with names starting in _ will be ignored
     2. Properties will be ignored
     3. If the class contains nested params classes, those will be flattened.
-    4. If there are any name conflicts during flattening, those will be resolved by appending the
-        enclosing param names as prefixes if fallback_to_prefix is True.
+    4. If use_prefix is True, a prefix (the enclosing param name) will be prepended to any nested
+        class parameter names no matter what.
+    5. If there are any name conflicts during flattening, those will be resolved by prepending the
+        enclosing param names as prefixes if use_prefix is True.
         See _create_param_name_variant docstring for more details
     """
-    flattened_params = {}
-    nested_class_params = defaultdict(list)
-    nested_class_conflicts = set()
     already_flat_params = {}
     for name, param in vars(cls).items():
         # ignore params that start with _
@@ -561,30 +560,20 @@ def _flatten_cls_params(cls: type(Params), fallback_to_prefix: bool = True) -> D
         # if the param is a nested param class
         elif isinstance(param, Params):
             for n, p in _flatten_cls_params(type(param)).items():
-                nested_class_params[name].append((n, p))
-                if n in flattened_params:
-                    nested_class_conflicts.add(n)
-                flattened_params[n] = p
+                if n in already_flat_params and not use_prefix:
+                    raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
+                elif not use_prefix:
+                    already_flat_params[n] = p
+                else:
+                    already_flat_params[_create_param_name_variant(n, name)] = p
+
         # ignore properties
         elif isinstance(param, property):
             continue
         else:
             raise ValueError(f'Param: {name} of type {type(param)} is not recognized!')
 
-    # resolve nested class conflicts
-    for cls_name, param_names in nested_class_params.items():
-        for n, p in param_names:
-            if n in nested_class_conflicts or n in already_flat_params:
-                if not fallback_to_prefix:
-                    raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
-                flattened_params[_create_param_name_variant(n, cls_name)] = p
-
-    for n in nested_class_conflicts:
-        del flattened_params[n]
-
-    flattened_params.update(already_flat_params)
-
-    return flattened_params
+    return already_flat_params
 
 
 def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
