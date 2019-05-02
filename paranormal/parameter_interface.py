@@ -23,12 +23,18 @@ __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict',
 
 class Params(Mapping):
     """
-    Base class for Params - supports:
+    Base class for Params
 
+    Supports:
     1. ** operation
     2 * operation (iterate through param names)
 
-    Inherit from this class and populate with Param classes from above. Ex.
+    Does Not Support:
+    1. Non-direct inheritance (inheriting from a class that inherits from Params)
+
+    Example Use Case:
+
+    Inherit from this class and populate with Param classes from paranormal.params
     ```
     class A(Params):
         g = GeomspaceParam(help='test', default=[0, 100, 20])
