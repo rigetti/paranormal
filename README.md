@@ -20,6 +20,7 @@ The following code samples show how this library is meant to be used.
 from paranormal.parameter_interface import *
 from paranormal.params import *
 
+# Note that only direct inheritance from Params is currently supported
 class FrequencySweep(Params):
     """
     A frequency sweep measurement
