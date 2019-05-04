@@ -159,6 +159,47 @@ def test_yaml_serialization():
                                    '\n- 5\nb: true\ne: X\nf: 0.5\ni: 1\nl:\n- 0\n- 1\n- 2\nr: 10\n'
 
 
+def test_merge_params():
+
+    merged_positionals = merge_param_classes(PositionalsA, PositionalsB)
+    for attr in PositionalsA():
+        if getattr(PositionalsA.__dict__.get(attr), 'positional', False):
+            assert merged_positionals.__dict__.get(attr, None) is None
+        else:
+            assert merged_positionals.__dict__.get(attr, None) == PositionalsA.__dict__.get(attr)
+    for attr in PositionalsB():
+        if getattr(PositionalsB.__dict__.get(attr), 'positional', False):
+            assert merged_positionals.__dict__.get(attr, None) is None
+        else:
+            assert merged_positionals.__dict__.get(attr, None) == PositionalsB.__dict__.get(attr)
+
+    # try without merging the positionals
+    merged_positionals = merge_param_classes(PositionalsA, PositionalsB,
+                                             merge_positional_params=False)
+    for attr in PositionalsA():
+        assert merged_positionals.__dict__.get(attr, None) == PositionalsA.__dict__.get(attr)
+    for attr in PositionalsB():
+        assert merged_positionals.__dict__.get(attr, None) == PositionalsB.__dict__.get(attr)
+
+    # try with conflicting parameters
+    with pytest.raises(ValueError):
+        merge_param_classes(FreqSweep, TimeSweep)
+
+    # try with nested classes
+    class YearlySchedule(Params):
+        winter = MyWinter()
+        summer = MySummer()
+        x = IntParam(help='an int')
+    merged = merge_param_classes(DoubleSweep, YearlySchedule,
+                                 merge_positional_params=False)
+    for attr in YearlySchedule():
+        assert merged.__dict__.get(attr, None) == YearlySchedule.__dict__.get(attr)
+    for attr in DoubleSweep():
+        assert merged.__dict__.get(attr, None) == DoubleSweep.__dict__.get(attr)
+
+
+
+
 def test_to_argparse():
 
     parser = to_argparse(MySummer)

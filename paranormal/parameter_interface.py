@@ -13,7 +13,7 @@ from paranormal.params import *
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
            'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args',
-           'get_param_unit']
+           'get_param_unit', 'merge_param_classes']
 
 
 ####################
@@ -198,27 +198,27 @@ def _merge_positional_params(params_list: List[Tuple[str, BaseDescriptor]]
     return list(positionals.keys()), positional_param
 
 
-def _merge_param_classes(params_cls_list = List[type(Params)],
-                         merge_positional_params: bool = True) -> type(Params):
+def merge_param_classes(*cls_list,
+                        merge_positional_params: bool = True) -> type(Params):
     """
     Merge multiple Params classes into a single merged params class and return the merged class.
     Note that this will not flatten the nested classes.
 
-    :param params_cls_list: A list of Params subclasses or classes to merge into a single
+    :param cls_list: A list of Params subclasses or classes to merge into a single
         Params class
     :param merge_positional_params: Whether or not to merge the positional params in the classes
     """
-    if len(params_cls_list) == 1:
-        return params_cls_list[0]
+    if len(cls_list) == 1:
+        return cls_list[0]
 
     class MergedParams(Params):
-        __doc__ = f'A Combination of {len(params_cls_list)} Params Classes:\n'
+        __doc__ = f'A Combination of {len(cls_list)} Params Classes:\n'
 
-    for params_cls in params_cls_list:
+    for params_cls in cls_list:
         for k, v in params_cls.__dict__.items():
             if not k.startswith('_'):
-                if hasattr(MergedParams, k):
-                    raise ValueError(f'Unable to merge classes {params_cls_list} due to conflicting'
+                if MergedParams.__dict__.get(k, None) is not None:
+                    raise ValueError(f'Unable to merge classes {cls_list} due to conflicting'
                                      f'param: {k}')
                 setattr(MergedParams, k, v)
                 if isinstance(v, BaseDescriptor):
@@ -666,15 +666,15 @@ def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple:
     return tuple(_unflatten_params_cls(cls, params) for cls in cls_list)
 
 
-def create_parser_and_parse_args(*cls,
+def create_parser_and_parse_args(*cls_list,
                                  throw_on_unknown: bool = False,
                                  **kwargs) -> Union[Tuple[Params], Params]:
     """
     Outside interface for creating a parser from multiple Params classes and parsing arguments
     """
-    parser = to_argparse(_merge_param_classes(cls), **kwargs)
+    parser = to_argparse(merge_param_classes(*cls_list), **kwargs)
     args, argv = parser.parse_known_args()
     if argv != [] and throw_on_unknown:
         raise ValueError(f'Unknown arguments: {argv}')
-    return from_parsed_args(*cls, params_namespace=args) \
-        if len(cls) > 1 else from_parsed_args(*cls, params_namespace=args)[0]
+    return from_parsed_args(*cls_list, params_namespace=args) \
+        if len(cls_list) > 1 else from_parsed_args(*cls_list, params_namespace=args)[0]
