@@ -13,7 +13,7 @@ from paranormal.params import *
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
            'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args',
-           'get_param_unit', 'merge_param_classes']
+           'get_param_unit', 'merge_param_classes', 'append_params_attributes']
 
 
 ####################
@@ -100,6 +100,11 @@ def _ensure_properties_are_working(params: Params) -> None:
             getattr(params, k)
 
 
+#################
+# Serialization #
+#################
+
+
 def to_json_serializable_dict(params: Params, include_defaults: bool = True,
                               include_hidden_params: bool = False) -> dict:
     """
@@ -175,6 +180,11 @@ def from_yaml_file(filename: str) -> Params:
     return params
 
 
+#############################
+# Params Class Manipulation #
+#############################
+
+
 def _merge_positional_params(params_list: List[Tuple[str, BaseDescriptor]]
                              ) -> Tuple[List[str], Optional[BaseDescriptor]]:
     """
@@ -214,15 +224,8 @@ def merge_param_classes(*cls_list,
     class MergedParams(Params):
         __doc__ = f'A Combination of {len(cls_list)} Params Classes:\n'
 
+    append_params_attributes(MergedParams, *cls_list)
     for params_cls in cls_list:
-        for k, v in params_cls.__dict__.items():
-            if not k.startswith('_'):
-                if MergedParams.__dict__.get(k, None) is not None:
-                    raise ValueError(f'Unable to merge classes {cls_list} due to conflicting'
-                                     f'param: {k}')
-                setattr(MergedParams, k, v)
-                if isinstance(v, BaseDescriptor):
-                    v.__set_name__(MergedParams, k)
         MergedParams.__doc__ += f'\n\t {params_cls.__name__} - {params_cls.__doc__}'
 
     # resolve positional arguments:
@@ -237,6 +240,62 @@ def merge_param_classes(*cls_list,
             delattr(MergedParams, k)
 
     return MergedParams
+
+
+def append_params_attributes(cls: type(Params),
+                             *other_cls_list,
+                             do_not_copy: List[str] = list(),
+                             override_dictionary: Dict = dict()) -> None:
+    """
+    When building a Params subclass, copy parameters from other Params subclasses using this
+    function (which will mutate the Params subclass but not the classes being copied from). If
+    there are parameters you do not want to copy, specify them in the do_not_copy list, and if
+    you'd like to override any defaults, specify them in the override_dictionary. Any merge
+    conflicts will throw an error.
+
+    :param cls: The params subclass to copy to
+    :param other_cls_list: Any number or other params subclasses to copy from
+    :param do_not_copy: A list of parameters not to copy
+    :param override_dictionary: A dictionary specifying any overrides to parameters (help, default,
+        etc.)
+
+
+    Ex.
+
+    ```python
+
+    class A(Params):
+        i = IntParam(help='int', default=1)
+
+    class B(Params):
+        f = FloatParam(help='float', default=2.0)
+        z = IntParam(help='another int')
+
+
+    append_params_attributes(A, B, do_not_copy=['z'],
+                            override_dictionary={'f' : {'help': 'a better float', 'default': 3.0}})
+    a = A()
+    print(a.f)  # prints 3.0
+    print(a.z)  # throws error
+    ```
+    """
+    for other_cls in other_cls_list:
+        for k, v in other_cls.__dict__.items():
+            if not (k.startswith('_') or k in do_not_copy):
+                if cls.__dict__.get(k, None) is not None:
+                    raise ValueError(f'Unable to append params from classes {other_cls_list} due '
+                                     f'to conflicting param: {k}')
+                copied_v = copy.deepcopy(v)
+                for _k, _v in override_dictionary.get(k, {}).items():
+                    setattr(copied_v, _k, _v)
+                setattr(cls, k, copied_v)
+                if isinstance(copied_v, BaseDescriptor):
+                    copied_v.__set_name__(cls, k)
+
+
+####################
+# Argument Parsing #
+####################
 
 
 def _get_param_type(param) -> type:
