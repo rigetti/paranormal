@@ -1,6 +1,7 @@
 from abc import ABC
 from enum import Enum, EnumMeta
-from typing import List, Optional, Set
+from typing import Iterable, List, Optional, Set, Tuple, Union
+import warnings
 
 import numpy as np
 
@@ -206,11 +207,28 @@ class EnumParam(BaseDescriptor):
         return tmp.name if tmp is not None else None
 
 
-class GeomspaceParam(BaseDescriptor):
+###############################
+# Numpy function based params #
+###############################
+
+
+def _check_numpy_fn_param_value(name: str, value: Iterable, nargs: int) -> bool:
+    """
+    Check whether a value is fit for use in a three argument numpy function
+    """
+    if (isinstance(value, (tuple, list)) and len(value) == nargs and
+            not any([i is None for i in value])):
+        return True
+    warnings.warn(f'Param {name} does not match format required (List or Tuple of length '
+                  f'{nargs} without any None values. Default behavior will not work')
+    return False
+
+
+class NumpyFunctionParam(BaseDescriptor):
     nargs = 3
     def __init__(self, *,
                  help: str,
-                 default: Optional[List] = None,
+                 default: Optional[Union[List, Tuple]] = None,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
@@ -220,90 +238,54 @@ class GeomspaceParam(BaseDescriptor):
         self.required = required
         self.help = help
         self.unit = unit
-        super(GeomspaceParam, self).__init__(**kwargs)
-
-
-    def __get__(self, instance, owner) -> Optional[np.ndarray]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        v = instance.__dict__.get(self.name, self.default)
-        if v is None or any([i is None for i in v]):
-            return v
-        return convert_to_si_units(np.geomspace(*instance.__dict__.get(self.name, self.default)),
-                                   self.unit)
-
-    def __set__(self, instance, value):
-        assert (isinstance(value, list) and value[0] != 0 and len(value) == 3) or value is None
-        instance.__dict__[self.name] = value
-
-
-class ArangeParam(BaseDescriptor):
-    nargs = 3
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[List] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(ArangeParam, self).__init__(**kwargs)
+        super(NumpyFunctionParam, self).__init__(**kwargs)
 
     def __get__(self, instance, owner) -> Optional[np.ndarray]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
         v = instance.__dict__.get(self.name, self.default)
-        if v is None or any([i is None for i in v]):
+        if not _check_numpy_fn_param_value(self.name, v, self.nargs):
             return v
-        return convert_to_si_units(np.arange(*instance.__dict__.get(self.name, self.default)),
-                                   self.unit)
+        return convert_to_si_units(self._numpy_function(v), self.unit)
 
     def __set__(self, instance, value):
-        assert (isinstance(value, list) and len(value) == 3) or value is None
+        _check_numpy_fn_param_value(self.name, value, self.nargs)
         instance.__dict__[self.name] = value
 
+    def _numpy_function(self, value: Iterable) -> np.ndarray:
+        raise NotImplementedError()
 
-class SpanArangeParam(ArangeParam):
-    def __get__(self, instance, owner):
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
+    def to_json(self, instance, include_default: bool = True):
         v = instance.__dict__.get(self.name, self.default)
-        if v is None or any([i is None for i in v]):
+        if _check_numpy_fn_param_value(self.name, v, self.nargs):
+            return super(NumpyFunctionParam, self).to_json(instance, include_default)
+        elif isinstance(v, np.ndarray):
+            return v.tolist()
+        else:
             return v
-        center, width, step = instance.__dict__.get(self.name, self.default)
-        return convert_to_si_units(np.arange(center - 0.5 * width, center + 0.5 * width, step),
-                                   self.unit)
 
 
-class LinspaceParam(BaseDescriptor):
-    nargs = 3
-    def __init__(self, *,
-                 help: str,
-                 default: Optional[List] = None,
-                 required: Optional[bool] = None,
-                 unit: Optional[str] = None,
-                 **kwargs):
-        if default is not None and required:
-            raise ValueError('Default cannot be specified if required is True!')
-        self.default = default
-        self.required = required
-        self.help = help
-        self.unit = unit
-        super(LinspaceParam, self).__init__(**kwargs)
-
-    def __get__(self, instance, owner) -> Optional[np.ndarray]:
-        if self.required and self.name not in instance.__dict__:
-            raise ValueError(f'{self.name} is a required argument and must be set first!')
-        v = instance.__dict__.get(self.name, self.default)
-        if v is None or any([i is None for i in v]):
-            return v
-        return convert_to_si_units(np.linspace(*instance.__dict__.get(self.name, self.default)),
-                                   self.unit)
-
+class GeomspaceParam(NumpyFunctionParam):
     def __set__(self, instance, value):
-        assert (isinstance(value, list) and len(value) == 3) or value is None
-        instance.__dict__[self.name] = value
+        if _check_numpy_fn_param_value(self.name, value, self.nargs):
+            assert value[0] != 0
+        super(GeomspaceParam, self).__set__(instance, value)
+
+    def _numpy_function(self, value: Iterable):
+        return np.geomspace(*value)
+
+
+class ArangeParam(NumpyFunctionParam):
+    def _numpy_function(self, value: Iterable):
+        return np.arange(*value)
+
+
+class SpanArangeParam(NumpyFunctionParam):
+    def _numpy_function(self, value: Iterable):
+        center, width, step = value[0], value[1], value[2]
+        return np.arange(center - 0.5 * width, center + 0.5 * width, step)
+
+
+class LinspaceParam(NumpyFunctionParam):
+    def _numpy_function(self, value: Iterable):
+        return np.linspace(value[0], value[1], int(value[2]))
