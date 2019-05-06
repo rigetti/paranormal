@@ -244,8 +244,8 @@ def merge_param_classes(*cls_list,
 
 def append_params_attributes(cls: type(Params),
                              *other_cls_list,
-                             do_not_copy: List[str] = list(),
-                             override_dictionary: Dict = dict()) -> None:
+                             do_not_copy: Optional[List[str]] = None,
+                             override_dictionary: Optional[Dict] = None) -> None:
     """
     When building a Params subclass, copy parameters from other Params subclasses using this
     function (which will mutate the Params subclass but not the classes being copied from). If
@@ -281,13 +281,14 @@ def append_params_attributes(cls: type(Params),
     """
     for other_cls in other_cls_list:
         for k, v in other_cls.__dict__.items():
-            if not (k.startswith('_') or k in do_not_copy):
+            if not (k.startswith('_') or (do_not_copy is not None and k in do_not_copy)):
                 if cls.__dict__.get(k, None) is not None:
                     raise ValueError(f'Unable to append params from classes {other_cls_list} due '
                                      f'to conflicting param: {k}')
                 copied_v = copy.deepcopy(v)
-                for _k, _v in override_dictionary.get(k, {}).items():
-                    setattr(copied_v, _k, _v)
+                if override_dictionary is not None and k in override_dictionary:
+                    for _k, _v in override_dictionary[k].items():
+                        setattr(copied_v, _k, _v)
                 setattr(cls, k, copied_v)
                 if isinstance(copied_v, BaseDescriptor):
                     copied_v.__set_name__(cls, k)
