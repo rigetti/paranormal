@@ -198,6 +198,23 @@ def test_merge_params():
         assert merged.__dict__.get(attr, None) == DoubleSweep.__dict__.get(attr)
 
 
+def test_append_params_attributes():
+    class A(Params):
+        i = IntParam(help='int', default=1)
+
+    class B(Params):
+        f = FloatParam(help='float', default=2.0)
+        z = IntParam(help='another int')
+
+    append_params_attributes(A, B, do_not_copy=['z'], override_dictionary={
+        'f': {'help': 'a better float', 'default': 3.0, 'positional': True}})
+    a = A()
+    assert a.f == 3.0
+    assert A.__dict__['f'].help == 'a better float'
+    assert A.__dict__['f'].positional
+
+    with pytest.raises(AttributeError):
+        assert a.z
 
 
 def test_to_argparse():

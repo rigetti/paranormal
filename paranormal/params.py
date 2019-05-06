@@ -30,6 +30,9 @@ class BaseDescriptor(ABC):
     def __set_name__(self, owner, name):
         self.name = name
 
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
     def to_json(self, instance, include_default: bool = True):
         return instance.__dict__.get(self.name,
                                      getattr(self, 'default', None) if include_default else None)
