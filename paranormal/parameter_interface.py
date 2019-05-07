@@ -622,7 +622,7 @@ def _flatten_cls_params(cls: type(Params), use_prefix: bool = True) -> Dict:
             for n, p in _flatten_cls_params(type(param)).items():
                 if n in already_flat_params and not use_prefix:
                     raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
-                elif not use_prefix:
+                if not use_prefix:
                     already_flat_params[n] = p
                 else:
                     already_flat_params[_create_param_name_variant(n, name)] = p
