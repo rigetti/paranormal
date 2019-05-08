@@ -6,7 +6,7 @@ import re
 from typing import Dict, List, Optional, Set, Tuple, Union
 import yaml
 
-from pampy import match, _
+from pampy import match, MatchError
 
 from paranormal.params import *
 
@@ -303,13 +303,19 @@ def append_params_attributes(cls: type(Params),
                 if cls.__dict__.get(k, None) is not None:
                     raise ValueError(f'Unable to append params from classes {other_cls_list} due '
                                      f'to conflicting param: {k}')
-                copied_v = copy.deepcopy(v)
+                if isinstance(v, BaseDescriptor):
+                    copied_v = copy.deepcopy(v)
+                    copied_v.__set_name__(cls, k)
+                elif isinstance(v, Params):
+                    copied_v = copy.deepcopy(v)
+                elif isinstance(v, property):
+                    copied_v = v
+                else:
+                    copied_v = copy.deepcopy(v)
                 if override_dictionary is not None and k in override_dictionary:
                     for _k, _v in override_dictionary[k].items():
                         setattr(copied_v, _k, _v)
                 setattr(cls, k, copied_v)
-                if isinstance(copied_v, BaseDescriptor):
-                    copied_v.__set_name__(cls, k)
 
 
 ####################
@@ -449,16 +455,23 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     default = param.default if required is None else None
     unit = getattr(param, 'unit', None)
 
+    # format metavar nicely for parameters that have expanded versions but aren't expanded
+    # check to see if the parameter has expanded param names
+    metavar = None
+    try:
+        expanded_param_names = _get_expanded_param_names(param)
+    except MatchError:
+        expanded_param_names = []
+    if not getattr(param, 'expand', False) and expanded_param_names != []:
+        metavar = tuple(x.upper() for x in expanded_param_names)
+
     # format help nicely if default is specified and suppress is not set
     help = param.help
     if not (positional or param.help == SUPPRESS):
-        expanded_param_names = _get_expanded_param_names(param)
-        if getattr(param, 'expand', False) and expanded_param_names != []:
-            help += f' as {expanded_param_names} '
         if unit is not None:
-            help += f'[default: {default} {unit}]'
+            help += f' [default: {default} {unit}]'
         else:
-            help += f'[default: {default}]'
+            help += f' [default: {default}]'
     if not required and positional:
         # TODO: use nargs='*' or nargs='?' to support not-required positional arguments
         raise ValueError('Not-required positional arguments are currently not supported')
@@ -475,7 +488,7 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     choices = match(param,
                     EnumParam, lambda x: list(x.cls.__members__.keys()),
                     BaseDescriptor, lambda x: getattr(x, 'choices', None))
-    kwargs = dict(action=action, nargs=nargs, default=default,
+    kwargs = dict(action=action, nargs=nargs, default=default, metavar=metavar,
                   type=argtype, required=required, help=help, choices=choices)
     # we delete all kwargs that are None to avoid hitting annoying action class initializations
     # such as when action is store_true and 'nargs' is in kwargs
@@ -501,8 +514,7 @@ def _get_expanded_param_names(param: BaseDescriptor) -> List[str]:
                  SpanArangeParam, ['center', 'width', 'step'],
                  GeomspaceParam, ['start', 'stop', 'num'],
                  ArangeParam, ['start', 'stop', 'step'],
-                 LinspaceParam, ['start', 'stop', 'num'],
-                 _, [])
+                 LinspaceParam, ['start', 'stop', 'num'])
 
 
 def _expand_param_name(param: BaseDescriptor) -> List[str]:
@@ -514,8 +526,6 @@ def _expand_param_name(param: BaseDescriptor) -> List[str]:
     if not getattr(param, 'expand', False):
         raise ValueError('Cannot expand param that does not have the expand kwarg')
     new_arg_names = _get_expanded_param_names(param)
-    if new_arg_names == []:
-        raise NotImplementedError(f'Cannot expand param of type {param.__class__.__name__}.')
     prefix = getattr(param, 'prefix', '')
     new_arg_names = [prefix + n for n in new_arg_names]
     return new_arg_names
@@ -680,12 +690,6 @@ def _flatten_cls_params(cls: type(Params),
                     already_flat_params[n] = p
                 else:
                     already_flat_params[_create_param_name_variant(n, name)] = p
-
-        # ignore properties
-        elif isinstance(param, property):
-            continue
-        else:
-            raise ValueError(f'Param: {name} of type {type(param)} is not recognized!')
 
     return already_flat_params
 
