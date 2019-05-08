@@ -256,7 +256,7 @@ def test_to_argparse():
         '--summer_c RED --winter_s 22 --summer_s_start 20 --summer_s_stop 600 --winter_w_start 20 '
         '--winter_w_stop 200 --winter_hib'.split(' '))
     assert args == Namespace(summer_c='RED', summer_do_something_crazy=False, summer_dpw_s=None,
-                             summer_f=None, summer_s_num=15, summer_s_start=20.0,
+                             summer_f=360, summer_s_num=15, summer_s_start=20.0,
                              summer_s_stop=600.0, summer_t=60, winter_dpw_w=None, winter_hib=True,
                              winter_s=22.0, winter_w_num=15, winter_w_start=20.0,
                              winter_w_stop=200.0)
@@ -269,7 +269,7 @@ def test_to_argparse():
     to_argparse(YearlySchedule)
     args = parser.parse_args([])
     assert args == Namespace(summer_c=Colors.BLUE, summer_do_something_crazy=False,
-                             summer_dpw_s=None, summer_f=None, summer_s_num=15, summer_s_start=0,
+                             summer_dpw_s=None, summer_f=360, summer_s_num=15, summer_s_start=0,
                              summer_s_stop=None, summer_t=60, winter_dpw_w=None, winter_hib=False,
                              winter_s=12, winter_w_num=15, winter_w_start=0, winter_w_stop=None)
 

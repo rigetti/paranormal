@@ -74,8 +74,8 @@ sweep_params = from_yaml_file('test_params.yaml')
 ### Nested Params
 ```python
 class MultipleFreqSweeps(Params):
-    sweep_1 = FrequencySweep(freqs=[0, 1, 0.1])
-    sweep_2 = FrequencySweep(freqs=[1, 2, 0.1])
+    sweep_1 = FrequencySweep(freqs=[0, 1, 0.1])  # overwrites default freqs value
+    sweep_2 = FrequencySweep(freqs=[1, 2, 0.1])  # overwrites default freqs value
     
 # Hide a nested param:
 class MultipleFreqSweepsHidden(Params):

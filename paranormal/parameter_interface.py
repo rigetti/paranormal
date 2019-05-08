@@ -630,7 +630,8 @@ def _create_param_name_variant(nested_param_name: str, enclosing_param_name: str
 
 def _flatten_cls_params(cls: type(Params),
                         use_prefix: bool = True,
-                        params_to_omit: Optional[Set[str]] = None) -> Dict:
+                        params_to_omit: Optional[Set[str]] = None,
+                        defaults_to_overwrite: Optional[Dict] = None) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
 
@@ -651,6 +652,9 @@ def _flatten_cls_params(cls: type(Params),
             continue
         # if we have an actual param
         elif isinstance(param, BaseDescriptor):
+            # overwrite the parameter default value if specified
+            if defaults_to_overwrite is not None and name in defaults_to_overwrite:
+                setattr(param, 'default', defaults_to_overwrite[name])
             # if the param is supposed to be expanded, then expand it
             if getattr(param, 'expand', False):
                 expanded = _expand_multi_arg_param(name, param)
@@ -663,8 +667,13 @@ def _flatten_cls_params(cls: type(Params),
         # if the param is a nested param class
         elif isinstance(param, Params):
             _params_to_omit = _get_omitted_params(param)
-            for n, p in _flatten_cls_params(type(param), use_prefix=use_prefix,
-                                            params_to_omit=_params_to_omit).items():
+            _defaults_to_overwrite = param.__dict__
+            flattened_nested_params = _flatten_cls_params(
+                type(param),
+                use_prefix=use_prefix,
+                params_to_omit=_params_to_omit,
+                defaults_to_overwrite=_defaults_to_overwrite)
+            for n, p in flattened_nested_params.items():
                 if n in already_flat_params and not use_prefix:
                     raise KeyError(f'Unable to flatten {cls.__name__} - conflict with param: {n}')
                 if not use_prefix:
