@@ -88,6 +88,10 @@ class DoubleSweep(Params):
     time_sweep = TimeSweep()
 
 
+class HiddenWinterSchedule(Params):
+    winter = MyWinter(s='__hide__', dpw_w='__hide__')
+
+
 def _compare_two_param_item_lists(a, b):
     for (k, v), (k_cor, v_cor) in zip(a, b):
         assert k == k_cor
@@ -136,6 +140,11 @@ def test_json_serialization():
 
     j = json.loads(json.dumps(to_json_serializable_dict(p, include_defaults=False)))
     assert p == from_json_serializable_dict(j)
+
+    # test with hiding some nested params
+    y = HiddenWinterSchedule()
+    j = json.loads(json.dumps(to_json_serializable_dict(y)))
+    assert y == from_json_serializable_dict(j)
 
 
 def test_yaml_serialization():
@@ -281,6 +290,11 @@ def test_to_argparse():
     with pytest.raises(ValueError):
         to_argparse(BadFreqSweep)
 
+    # test with hiding some nested params
+    parser = to_argparse(HiddenWinterSchedule)
+    args = parser.parse_args([])
+    assert vars(args) == {'winter_hib': False}
+
 
 def test_from_parsed_args():
 
@@ -334,6 +348,13 @@ def test_from_parsed_args():
     y = from_parsed_args(DoubleSweep, params_namespace=args)[0]
     correct_items = [('freq_sweep', FreqSweep(freqs=[10, 40.0, 30])),
                      ('time_sweep', TimeSweep(times=[20, 30, 20]))]
+    _compare_two_param_item_lists(y.items(), correct_items)
+
+    # test with hiding some nested params
+    parser = to_argparse(HiddenWinterSchedule)
+    args = parser.parse_args([])
+    y = from_parsed_args(HiddenWinterSchedule, params_namespace=args)[0]
+    correct_items = [('winter', MyWinter(dpw_w=None, s=None))]
     _compare_two_param_item_lists(y.items(), correct_items)
 
 
