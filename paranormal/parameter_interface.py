@@ -6,7 +6,7 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 import yaml
 
-from pampy import match
+from pampy import match, _
 
 from paranormal.params import *
 
@@ -432,11 +432,15 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     unit = getattr(param, 'unit', None)
 
     # format help nicely if default is specified and suppress is not set
-    if positional or param.help == SUPPRESS:
-        help = param.help
-    else:
-        help = f'{param.help} [default: {default} {unit}]' \
-            if unit is not None else f'{param.help} [default: {default}]'
+    help = param.help
+    if not (positional or param.help == SUPPRESS):
+        expanded_param_names = _get_expanded_param_names(param)
+        if getattr(param, 'expand', False) and expanded_param_names != []:
+            help += f' as {expanded_param_names} '
+        if unit is not None:
+            help += f'[default: {default} {unit}]'
+        else:
+            help += f'[default: {default}]'
     if not required and positional:
         # TODO: use nargs='*' or nargs='?' to support not-required positional arguments
         raise ValueError('Not-required positional arguments are currently not supported')
@@ -463,6 +467,18 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     parser.add_argument(argname, **kwargs)
 
 
+def _get_expanded_param_names(param: BaseDescriptor) -> List[str]:
+    """
+    Get bare expanded param names
+    """
+    return match(param,
+                 SpanArangeParam, ['center', 'width', 'step'],
+                 GeomspaceParam, ['start', 'stop', 'num'],
+                 ArangeParam, ['start', 'stop', 'step'],
+                 LinspaceParam, ['start', 'stop', 'num'],
+                 _, [])
+
+
 def _expand_param_name(param: BaseDescriptor) -> List[str]:
     """
     Get expanded param names
@@ -471,11 +487,9 @@ def _expand_param_name(param: BaseDescriptor) -> List[str]:
     """
     if not getattr(param, 'expand', False):
         raise ValueError('Cannot expand param that does not have the expand kwarg')
-    new_arg_names = match(param,
-                          SpanArangeParam, ['center', 'width', 'step'],
-                          GeomspaceParam, ['start', 'stop', 'num'],
-                          ArangeParam, ['start', 'stop', 'step'],
-                          LinspaceParam, ['start', 'stop', 'num'])
+    new_arg_names = _get_expanded_param_names(param)
+    if new_arg_names == []:
+        raise NotImplementedError(f'Cannot expand param of type {param.__class__.__name__}.')
     prefix = getattr(param, 'prefix', '')
     new_arg_names = [prefix + n for n in new_arg_names]
     return new_arg_names
