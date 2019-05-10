@@ -664,6 +664,7 @@ def _flatten_cls_params(cls: type(Params),
         elif isinstance(param, BaseDescriptor):
             # overwrite the parameter default value if specified
             if defaults_to_overwrite is not None and name in defaults_to_overwrite:
+                param = copy.deepcopy(param)  # need to deepcopy to avoid modifying the class
                 setattr(param, 'default', defaults_to_overwrite[name])
             # if the param is supposed to be expanded, then expand it
             if getattr(param, 'expand', False):
@@ -759,7 +760,7 @@ def _unflatten_params_cls(cls: type(Params),
     return cls(**cls_specific_params)
 
 
-def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple:
+def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple[Params]:
     """
     Convert a list of params classes and an argparse parsed namespace to a list of class instances
     """

@@ -263,15 +263,17 @@ def test_to_argparse():
 
     class YearlySchedule(Params):
         winter = MyWinter()
-        summer = MySummer(f=360)
+        summer = MySummer()
         spring = MySpring()
 
-    to_argparse(YearlySchedule)
+    parser = to_argparse(YearlySchedule)
     args = parser.parse_args([])
     assert args == Namespace(summer_c=Colors.BLUE, summer_do_something_crazy=False,
-                             summer_dpw_s=None, summer_f=360, summer_s_num=15, summer_s_start=0,
+                             summer_dpw_s=None, summer_f=None, summer_s_num=15, summer_s_start=0,
                              summer_s_stop=None, summer_t=60, winter_dpw_w=None, winter_hib=False,
-                             winter_s=12, winter_w_num=15, winter_w_start=0, winter_w_stop=None)
+                             winter_s=12, winter_w_num=15, winter_w_start=0, winter_w_stop=None,
+                             spring_dpw_s=None, spring_flowers=12, spring_sp_num=15,
+                             spring_sp_start=0, spring_sp_stop=None)
 
 
     # Make sure conflicting params are resolved
