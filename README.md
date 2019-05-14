@@ -2,6 +2,8 @@
 
 A declarative, parameter-parsing library that provides multiple parsing interfaces (YAML, command line, and JSON) for loading parameters.
 
+[![pipeline status](https://gitlab.com/rigetti/forest/paranormal/badges/master/pipeline.svg)](https://gitlab.com/rigetti/forest/paranormal/commits/master)
+
 ## Python Install:
 
 Just install from PyPi using `pip install paranormal`.
