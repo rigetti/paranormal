@@ -1,0 +1,10 @@
+image: python:3.6
+
+test:
+  tags:
+    - github
+  script:
+    - pip install poetry
+    - poetry install
+    - source /root/.cache/pypoetry/virtualenvs/paranormal-py3.6/bin/activate
+    - pytest
