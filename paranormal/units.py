@@ -37,7 +37,7 @@ def unconvert_si_units(value, unit: Optional[str] = None):
     """
     Convert from si units back to "unit" units
     """
-    if unit is None:
+    if value is None or unit is None:
         return value
     try:
         return value / UNIT_CONVERSION_TABLE[unit]
