@@ -297,6 +297,19 @@ def test_to_argparse():
     args = parser.parse_args([])
     assert vars(args) == {'winter_hib': False}
 
+    # test by overriding prefix behavior
+    class PrefixMania(Params):
+        x = ArangeParam(help='some arange', default=[0, 10, 20])
+
+    class NestedPrefixMania(Params):
+        a = PrefixMania()
+        b = PrefixMania()
+        __nested_prefixes__ = {'a': 'ayy', 'b': None}
+
+    parser = to_argparse(NestedPrefixMania)
+    args = parser.parse_args([])
+    assert vars(args) == {'ayy_x': [0, 10, 20], 'x': [0, 10, 20]}
+
 
 def test_from_parsed_args():
 
@@ -378,6 +391,7 @@ def test_create_parser_and_parse_args():
     class YearlySchedule(Params):
         winter = MyWinter()
         summer = MySummer(f=None)
+        __nested_prefixes__ = {'winter': None, 'summer': None}
 
     with mock.patch('paranormal.parameter_interface.ArgumentParser.parse_known_args') as pa:
         pa.return_value = (Namespace(c='RED', do_something_crazy=False, dpw_s=None, dpw_w=None,
