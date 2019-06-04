@@ -2,6 +2,7 @@ from argparse import ArgumentParser, Namespace, SUPPRESS
 import copy
 from collections import defaultdict, Mapping
 import importlib
+import json
 import re
 from typing import Dict, List, Optional, Set, Tuple, Union
 import yaml
@@ -65,7 +66,8 @@ class Params(Mapping):
         return getattr(self, item)
 
     def __eq__(self, other) -> bool:
-        return to_json_serializable_dict(self) == to_json_serializable_dict(other)
+        return json.loads(json.dumps(to_json_serializable_dict(self))) == \
+               json.loads(json.dumps(to_json_serializable_dict(self)))
 
 
 def get_param_unit(cls: type(Params), param_name: str) -> str:
