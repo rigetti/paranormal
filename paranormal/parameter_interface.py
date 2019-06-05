@@ -586,7 +586,7 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
 def _extract_expanded_param(parsed_values: dict,
                             name: str,
                             param: BaseDescriptor,
-                            enclosing_param_name: Optional[str] = None) -> Optional[List]:
+                            prefix: Optional[str]) -> Optional[List]:
     """
     Convert [start, stop, num] or [start, stop, step], etc. from expanded form back into a list to
     be easily fed into the un-expanded param
@@ -595,13 +595,11 @@ def _extract_expanded_param(parsed_values: dict,
         from the namespace)
     :param name: Original name of the param that was expanded (may have a prefix)
     :param param: The param that was expanded
-    :param enclosing_param_name: If the param is a nested param, there's a chance we had to append
+    :param prefix: If the param is a nested param, there's a chance we had to append
         the enclosing class name as a prefix to deconflict arguments with the same name. See
-        _create_param_name_variant docstring for more info.
+        _create_param_name_prefix docstring for more info.
     """
-    old_arg_names = _expand_param_name(param)
-    if enclosing_param_name is not None:
-        old_arg_names = [_create_param_name_variant(n, enclosing_param_name) for n in old_arg_names]
+    old_arg_names = [prefix + n if prefix is not None else n for n in _expand_param_name(param)]
     assert parsed_values.get(name) is None, f'param {name} was expanded! ' \
                                             f'Please provide {old_arg_names} instead'
     start_stop_x_list = [parsed_values[n] for n in old_arg_names]
@@ -610,13 +608,15 @@ def _extract_expanded_param(parsed_values: dict,
     return start_stop_x_list
 
 
-def _create_param_name_variant(nested_param_name: str, enclosing_param_name: str) -> str:
+def _create_param_name_prefix(enclosing_param_name: Optional[str],
+                              prefix_dictionary: Optional[Dict]) -> str:
     """
     Create a param name variant to de-conflict conflicting params
 
-    :param nested_param_name: The param name (part of a nested param class) that has a conflict with
-        another nested param name
     :param enclosing_param_name: The name of the enclosing class's parameter
+    :param prefix_dictionary: If the user sets __nested_prefixes__ in their Params class
+        declaration, they can manually override any prefix for a nested class or specify not to use
+        one by specifying None.
 
     Ex.
     ```
@@ -634,8 +634,27 @@ def _create_param_name_variant(nested_param_name: str, enclosing_param_name: str
     because there's a conflict with x in both A and B.
 
     The enclosing param names for x are "a" and "b" in this example.
+
+    Ex 2.
+    ```
+    class A(Params):
+        x = LinspaceParam(expand=True, ...)
+
+    class B(Params):
+        x = LinspaceParam(expand=True, ...)
+
+    class C(Params):
+        __nested_prefixes__ = {'a': 'ayy', 'b': None}
+        a = A()
+        b = B()
+    ```
+    will result in ayy_start, ayy_stop, ayy_num, start, stop, and num as command line
+    parameters.
     """
-    return enclosing_param_name + '_' + nested_param_name
+    if prefix_dictionary is not None and enclosing_param_name is not None:
+        prefix = prefix_dictionary.get(enclosing_param_name, enclosing_param_name)
+        return prefix + '_' if prefix is not None else ''
+    return enclosing_param_name + '_' if enclosing_param_name is not None else ''
 
 
 def _flatten_cls_params(cls: type(Params),
@@ -653,7 +672,7 @@ def _flatten_cls_params(cls: type(Params),
         class parameter names no matter what.
     5. If there are any name conflicts during flattening, those will be resolved by prepending the
         enclosing param names as prefixes if use_prefix is True.
-        See _create_param_name_variant docstring for more details
+        See _create_param_name_prefix docstring for more details
     """
     already_flat_params = {}
     for name, param in vars(cls).items():
@@ -690,7 +709,14 @@ def _flatten_cls_params(cls: type(Params),
                 if not use_prefix:
                     already_flat_params[n] = p
                 else:
-                    already_flat_params[_create_param_name_variant(n, name)] = p
+                    prefix = _create_param_name_prefix(name,
+                                                       getattr(cls, '__nested_prefixes__', None))
+                    name_variant = prefix + n
+                    if name_variant in already_flat_params:
+                        raise KeyError(
+                            f'Unable to flatten {cls.__name__} - conflict with param: {n} - '
+                            f'attempted to use param name: {name_variant} but failed.')
+                    already_flat_params[name_variant] = p
 
     return already_flat_params
 
@@ -723,7 +749,7 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
 
 def _unflatten_params_cls(cls: type(Params),
                           parsed_params: dict,
-                          enclosing_param_name: str = '',
+                          prefix: Optional[str] = None,
                           params_to_omit: Optional[Set[str]] = None) -> Params:
     """
     Recursively construct a Params class or subclass (handles nested Params classes) using values
@@ -731,8 +757,7 @@ def _unflatten_params_cls(cls: type(Params),
 
     :param cls: The Params class to create an instance of
     :param parsed_params: The params parsed from the command line
-    :param enclosing_param_name: Name of the enclosing param. See _create_param_name_variant
-        docstring for more details
+    :param prefix: The prefix for all param names
     :param params_to_omit: Params to set to None when de-serializing the parsed params dictionary
     :return: An instance of cls with params set from the parsed params dictionary
     """
@@ -744,18 +769,18 @@ def _unflatten_params_cls(cls: type(Params),
             if params_to_omit is not None and k in params_to_omit:
                 cls_specific_params[k] = None
                 continue
-            param_name = _create_param_name_variant(k, enclosing_param_name) \
-                if k not in parsed_params else k
+            param_name = prefix + k if k not in parsed_params and prefix is not None else k
             if getattr(v, 'expand', False):
-                unexpanded_param = _extract_expanded_param(
-                    parsed_params, param_name, v, enclosing_param_name if k != param_name else None)
+                unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
                 cls_specific_params.update({k: unexpanded_param})
             else:
                 cls_specific_params[k] = parsed_params[param_name]
         elif isinstance(v, Params):
             _params_to_omit = _get_omitted_params(v)
+            next_prefix = _create_param_name_prefix(k, getattr(cls, '__nested_prefixes__', None))
+            _prefix = prefix + next_prefix if prefix is not None else next_prefix
             cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
-                                                           enclosing_param_name=k,
+                                                           prefix=_prefix,
                                                            params_to_omit=_params_to_omit)
     return cls(**cls_specific_params)
 
