@@ -28,7 +28,7 @@ class P(Params):
     r = IntParam(required=True, help='An integer that is required!')
     e = EnumParam(cls=E, help='an enum', default=E.X)
     l = ListParam(subtype=int, default=[0, 1, 2], help='a list')
-    a = ArangeParam(help='arange param', default=[0, 100, 5])
+    a = ArangeParam(help='arange param', default=(0, 100, 5))
 
 
 class Colors(Enum):
@@ -39,7 +39,7 @@ class Colors(Enum):
 
 
 class MySummer(Params):
-    dpw_s = LinspaceParam(help='Drinks per weekend', expand=True, default=[0, None, 15],
+    dpw_s = LinspaceParam(help='Drinks per weekend', expand=True, default=(0, None, 15),
                           prefix='s_')
     c = EnumParam(cls=Colors, default=Colors.BLUE, help='Color of the sky')
     t = FloatParam(help='Time spent sunbathing before I burn', default=60, unit='ns')
@@ -50,13 +50,13 @@ class MySummer(Params):
 class MyWinter(Params):
     s = FloatParam(default=12, help='hours sleeping per 24 hrs')
     hib = BoolParam(default=False, help='Whether or not to hibernate')
-    dpw_w = LinspaceParam(help='Drinks per weekend', expand=True, default=[0, None, 15],
+    dpw_w = LinspaceParam(help='Drinks per weekend', expand=True, default=(0, None, 15),
                           prefix='w_')
 
 
 class MySpring(Params):
     flowers = FloatParam(default=12, help='flowers sprouting per day')
-    dpw_s = LinspaceParam(help='Drinks per weekend', expand=True, default=[0, None, 15],
+    dpw_s = LinspaceParam(help='Drinks per weekend', expand=True, default=(0, None, 15),
                           prefix='sp_')
 
 
@@ -72,14 +72,14 @@ class PositionalsB(Params):
 
 
 class FreqSweep(Params):
-    freqs = LinspaceParam(help='freqs', expand=True, default=[10, 20, 30], unit='MHz',
+    freqs = LinspaceParam(help='freqs', expand=True, default=(10, 20, 30), unit='MHz',
                           prefix='f_')
-    times = LinspaceParam(help='times', expand=True, default=[100, 200, 50], unit='us',
+    times = LinspaceParam(help='times', expand=True, default=(100, 200, 50), unit='us',
                           prefix='t_')
 
 
 class TimeSweep(Params):
-    times = LinspaceParam(help='times', expand=True, default=[100, 500, 20], unit='ns',
+    times = LinspaceParam(help='times', expand=True, default=(100, 500, 20), unit='ns',
                           prefix='t_')
 
 
@@ -154,7 +154,8 @@ def test_yaml_serialization():
         o.return_value = temp
         to_yaml_file(p, 'mock.yaml', include_defaults=True)
     with open(temp.name) as yaml_file:
-        assert yaml_file.read() == 'b: true\ni: 1\nf: 0.5\nr: 10\ne: X\nl:\n- 0\n- 1\n- 2\na:\n- ' \
+        assert yaml_file.read() == 'b: true\ni: 1\nf: 0.5\nr: 10\ne: X\nl:\n- 0\n- 1\n- 2\na: ' \
+                                   '!!python/tuple\n- ' \
                                    '0\n- 100\n- 5\n_type: P\n_module: test_parameter_interface\n'
 
     # test yaml dumping with alphabetical reorder
@@ -164,7 +165,8 @@ def test_yaml_serialization():
         o.return_value = temp
         to_yaml_file(p, 'mock.yaml', include_defaults=True, sort_keys=True)
     with open(temp.name) as yaml_file:
-        assert yaml_file.read() == '_module: test_parameter_interface\n_type: P\na:\n- 0\n- 100' \
+        assert yaml_file.read() == '_module: test_parameter_interface\n_type: P\na: ' \
+                                   '!!python/tuple\n- 0\n- 100' \
                                    '\n- 5\nb: true\ne: X\nf: 0.5\ni: 1\nl:\n- 0\n- 1\n- 2\nr: 10\n'
 
 

@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import Enum, EnumMeta
-from typing import Iterable, List, Optional, Set, Tuple, Union
+from typing import Iterable, List, Optional, Set, Tuple
 import warnings
 
 import numpy as np
@@ -116,7 +116,7 @@ class StringParam(BaseDescriptor):
             raise ValueError(f'{self.name} is a required argument and must be set first!')
         if instance.__dict__.get(self.name, self.default) is None:
             return None
-        return instance.__dict__.get(self.name, self.default)
+        return str(instance.__dict__.get(self.name, self.default))
 
 
 class ListParam(BaseDescriptor):
@@ -220,20 +220,23 @@ def _check_numpy_fn_param_value(name: str, value: Iterable, nargs: int) -> bool:
             not any([i is None for i in value])):
         return True
     warnings.warn(f'Param {name} does not match format required (List or Tuple of length '
-                  f'{nargs} without any None values. Default behavior will not work')
+                  f'{nargs} without any None values. Default behavior will not work.')
     return False
 
 
 class NumpyFunctionParam(BaseDescriptor):
     nargs = 3
+
     def __init__(self, *,
                  help: str,
-                 default: Optional[Union[List, Tuple]] = None,
+                 default: Optional[Tuple] = None,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
+        if not isinstance(default, tuple) and default is not None:
+            raise ValueError('Default must be either a tuple or None')
         self.default = default
         self.required = required
         self.help = help
