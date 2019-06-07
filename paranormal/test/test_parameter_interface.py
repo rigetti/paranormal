@@ -301,7 +301,7 @@ def test_to_argparse():
 
     # test by overriding prefix behavior
     class PrefixMania(Params):
-        x = ArangeParam(help='some arange', default=[0, 10, 20])
+        x = ArangeParam(help='some arange', default=(0, 10, 20))
 
     class NestedPrefixMania(Params):
         a = PrefixMania()
@@ -310,7 +310,7 @@ def test_to_argparse():
 
     parser = to_argparse(NestedPrefixMania)
     args = parser.parse_args([])
-    assert vars(args) == {'ayy_x': [0, 10, 20], 'x': [0, 10, 20]}
+    assert vars(args) == {'ayy_x': (0, 10, 20), 'x': (0, 10, 20)}
 
 
 def test_from_parsed_args():
