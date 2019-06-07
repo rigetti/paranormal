@@ -40,12 +40,13 @@ class BaseDescriptor(ABC):
 
 
 class BoolParam(BaseDescriptor):
-    def __init__(self, *, help: str, default: bool, **kwargs):
+    def __init__(self, *, help: str, default: bool, hide: bool = False, **kwargs):
         if 'required' in kwargs or default is None:
             raise ValueError('BoolParam cannot be a required argument '
                              'and must have a default value')
         self.default = default
         self.help = help
+        self.hide = hide
         super(BoolParam, self).__init__(**kwargs)
 
     def __get__(self, instance, owner) -> bool:
@@ -56,12 +57,14 @@ class FloatParam(BaseDescriptor):
     def __init__(self, *,
                  help: str,
                  default: Optional[float] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         self.unit = unit
@@ -79,12 +82,14 @@ class IntParam(BaseDescriptor):
     def __init__(self, *,
                  help: str,
                  default: Optional[int] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         self.unit = unit
@@ -102,11 +107,13 @@ class StringParam(BaseDescriptor):
     def __init__(self, *,
                  help: str,
                  default: Optional[str] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         super(StringParam, self).__init__(**kwargs)
@@ -124,12 +131,14 @@ class ListParam(BaseDescriptor):
                  help: str,
                  subtype: type = str,
                  default: Optional[List] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         self.unit = unit
@@ -150,12 +159,14 @@ class SetParam(BaseDescriptor):
                  help: str,
                  subtype: type = str,
                  default: Optional[Set] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         self.unit = unit
@@ -176,6 +187,7 @@ class EnumParam(BaseDescriptor):
                  help: str,
                  cls: EnumMeta,
                  default: Optional[Enum] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  **kwargs):
         if default is not None and required:
@@ -184,6 +196,7 @@ class EnumParam(BaseDescriptor):
             raise ValueError(f'Default {default} is not a member of {cls}')
         self.cls = cls
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         super(EnumParam, self).__init__(**kwargs)
@@ -230,6 +243,7 @@ class NumpyFunctionParam(BaseDescriptor):
     def __init__(self, *,
                  help: str,
                  default: Optional[Tuple] = None,
+                 hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
@@ -238,6 +252,7 @@ class NumpyFunctionParam(BaseDescriptor):
         if not isinstance(default, tuple) and default is not None:
             raise ValueError('Default must be either a tuple or None')
         self.default = default
+        self.hide = hide
         self.required = required
         self.help = help
         self.unit = unit

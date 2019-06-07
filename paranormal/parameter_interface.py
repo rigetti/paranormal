@@ -666,7 +666,7 @@ def _flatten_cls_params(cls: type(Params),
     """
     Extract params from a Params class - Behavior is as follows:
 
-    1. Params with names starting in _ will be ignored
+    1. Params with names starting in _ or with the hide attribute set to True will be ignored
     2. Properties and params in the params_to_omit set will be ignored
     3. If the class contains nested params classes, those will be flattened. Any nested class
         param set to __hide__ will be omitted
@@ -678,8 +678,10 @@ def _flatten_cls_params(cls: type(Params),
     """
     already_flat_params = {}
     for name, param in vars(cls).items():
-        # ignore params that start with _ or are in params_to_omit
-        if name.startswith('_') or params_to_omit is not None and name in params_to_omit:
+        # ignore params that start with _ or are in params_to_omit or have the hide attribute = True
+        if (name.startswith('_') or
+                (params_to_omit is not None and name in params_to_omit) or
+                getattr(param, 'hide', False)):
             continue
         # if we have an actual param
         elif isinstance(param, BaseDescriptor):
@@ -765,7 +767,7 @@ def _unflatten_params_cls(cls: type(Params),
     """
     cls_specific_params = {}
     for k, v in cls.__dict__.items():
-        if k.startswith('_'):
+        if k.startswith('_') or getattr(v, 'hide', False):
             continue
         elif isinstance(v, BaseDescriptor):
             if params_to_omit is not None and k in params_to_omit:

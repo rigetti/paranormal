@@ -92,6 +92,11 @@ class HiddenWinterSchedule(Params):
     winter = MyWinter(s='__hide__', dpw_w='__hide__')
 
 
+class HiddenFall(Params):
+    leaf = FloatParam(default=2, help='number of falling leaves caught', hide=True)
+    pumpkin = BoolParam(default=True, help='Whether the pumpkin got carved', hide=False)
+
+
 def _compare_two_param_item_lists(a, b):
     for (k, v), (k_cor, v_cor) in zip(a, b):
         assert k == k_cor
@@ -373,6 +378,12 @@ def test_from_parsed_args():
     y = from_parsed_args(HiddenWinterSchedule, params_namespace=args)[0]
     correct_items = [('winter', MyWinter(dpw_w=None, s=None))]
     _compare_two_param_item_lists(y.items(), correct_items)
+
+    # test that hide param works
+    parser = to_argparse(HiddenFall)
+    help = parser.format_help()
+    assert 'pumpkin' in help
+    assert 'leaf' not in help
 
 
 def test_create_parser_and_parse_args():
