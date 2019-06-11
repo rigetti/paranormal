@@ -24,11 +24,11 @@ class E(Enum):
 class P(Params):
     b = BoolParam(default=True, help='a boolean!')
     i = IntParam(default=1, help='an integer!')
-    f = FloatParam(default=0.5, help='A float!')
+    f = FloatParam(default=0.5, help='A float!', unit='MHz')
     r = IntParam(required=True, help='An integer that is required!')
     e = EnumParam(cls=E, help='an enum', default=E.X)
     l = ListParam(subtype=int, default=[0, 1, 2], help='a list')
-    a = ArangeParam(help='arange param', default=(0, 100, 5))
+    a = ArangeParam(help='arange param', default=(0, 100, 5), unit='us')
 
 
 class Colors(Enum):
@@ -114,9 +114,9 @@ def _compare_two_param_item_lists(a, b):
 def test_params():
 
     p = P(b=False, i=2, f=0.2, r=5)
-    correct_values = [('b', False), ('i', 2), ('f', 0.2), ('r', 5), ('e', E.X), ('l', [0, 1, 2]),
+    correct_values = [('b', False), ('i', 2), ('f', 0.2e6), ('r', 5), ('e', E.X), ('l', [0, 1, 2]),
                       ('a', np.array([0,  5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70,
-                                      75, 80, 85, 90, 95]))]
+                                      75, 80, 85, 90, 95]) * 1e-6)]
     _compare_two_param_item_lists(p.items(), correct_values)
 
     # test with an argument that isn't in P
@@ -126,6 +126,12 @@ def test_params():
     # Try without providing r
     with pytest.raises(KeyError):
         P()
+
+    # test si_set
+    p.si_set('f', 0.3e6)
+    assert p.f == 0.3e6
+    p.si_set('a', [1.2e-6, 1.5e-6, 100])
+    assert np.allclose(p.a, np.arange(1.2, 1.5, 100) * 1e-6)
 
 
 def test_json_serialization():

@@ -4,12 +4,13 @@ from collections import defaultdict, Mapping
 import importlib
 import json
 import re
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 import yaml
 
 from pampy import match, MatchError
 
 from paranormal.params import *
+from paranormal.units import unconvert_si_units
 
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
@@ -68,6 +69,22 @@ class Params(Mapping):
     def __eq__(self, other) -> bool:
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
                json.loads(json.dumps(to_json_serializable_dict(self)))
+
+    def si_set(self, param_name: str, value: Union[float, int, Iterable]):
+        """
+        Set the parameter from a value that's in SI units
+
+        :param param_name: The parameter name to set
+        :param value: The new value in SI units
+        """
+        param = type(self).__dict__.get(param_name)
+        expanded_units = _expand_param_units(param)
+        if expanded_units is not None:
+            values = [unconvert_si_units(v, u) for v, u in zip(value, expanded_units)]
+            setattr(self, param_name, values)
+        else:
+            unit = get_param_unit(type(self), param_name)
+            setattr(self, param_name, unconvert_si_units(value, unit))
 
 
 def get_param_unit(cls: type(Params), param_name: str) -> str:
@@ -533,6 +550,25 @@ def _expand_param_name(param: BaseDescriptor) -> List[str]:
     return new_arg_names
 
 
+def _expand_param_units(param: BaseDescriptor) -> List[Optional[str]]:
+    """
+    Get expanded param units
+
+    :param param: The param to get units for
+    :return: A list of the units (or None if no unit)
+    """
+    unit = getattr(param, 'unit', None)
+    expanded_units = match(param,
+                           GeomspaceParam,
+                           lambda p: [unit, unit, None],
+                           ArangeParam,
+                           lambda p: [unit, unit, unit],
+                           LinspaceParam,
+                           lambda p: [unit, unit, None],
+                           BaseDescriptor, None)
+    return expanded_units
+
+
 def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tuple, Tuple]:
     """
     Expand a parameter like GeomspaceParam or ArangeParam into seperate IntParams and FloatParams to
@@ -548,14 +584,7 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
                            GeomspaceParam, [FloatParam, FloatParam, IntParam],
                            ArangeParam, [FloatParam, FloatParam, FloatParam],
                            LinspaceParam, [FloatParam, FloatParam, IntParam])
-    unit = getattr(param, 'unit', None)
-    expanded_units = match(param,
-                           GeomspaceParam,
-                           lambda p: [unit, unit, None],
-                           ArangeParam,
-                           lambda p: [unit, unit, unit],
-                           LinspaceParam,
-                           lambda p: [unit, unit, None])
+    expanded_units = _expand_param_units(param)
     defaults = getattr(param, 'default', [None, None, None])
     if defaults is None:
         defaults = [None, None, None]
