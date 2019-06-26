@@ -349,6 +349,7 @@ def _get_param_type(param) -> type:
     argtype = match(param,
                     LinspaceParam, lambda x: float,
                     ArangeParam, lambda x: float,
+                    SpanArangeParam, lambda x: float,
                     GeomspaceParam, lambda x: float,
                     ListParam, lambda x: param.subtype,
                     SetParam, lambda x: param.subtype,
@@ -563,6 +564,8 @@ def _expand_param_units(param: BaseDescriptor) -> List[Optional[str]]:
                            lambda p: [unit, unit, None],
                            ArangeParam,
                            lambda p: [unit, unit, unit],
+                           SpanArangeParam,
+                           lambda p: [unit, unit, unit],
                            LinspaceParam,
                            lambda p: [unit, unit, None],
                            BaseDescriptor, None)
@@ -583,6 +586,7 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
     expanded_types = match(param,
                            GeomspaceParam, [FloatParam, FloatParam, IntParam],
                            ArangeParam, [FloatParam, FloatParam, FloatParam],
+                           SpanArangeParam, [FloatParam, FloatParam, FloatParam],
                            LinspaceParam, [FloatParam, FloatParam, IntParam])
     expanded_units = _expand_param_units(param)
     defaults = getattr(param, 'default', [None, None, None])
