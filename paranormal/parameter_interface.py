@@ -195,7 +195,7 @@ def from_json_serializable_dict(dictionary: dict,
 def to_yaml_file(params: Params,
                  filename: str,
                  *,
-                 include_defaults: bool=False,
+                 include_defaults: bool = False,
                  include_hidden_params: bool = False,
                  sort_keys: bool = False):
     """
@@ -366,9 +366,9 @@ def _convert_type_to_regex(argtype: type) -> str:
     """
     Source of truth for getting regex strings to match different types
     """
-    regex_patterns = {int : r'\b[\+-]?(?<![\.\d])\d+(?!\.\d)\b',
-                      float : r'[-\+]?(?:\d+(?<!\.)\.?(?!\.)\d*|\.?\d+)(?:[eE][-\+]?\d+)?',
-                      str : r'\b.*\b'}
+    regex_patterns = {int: r'\b[\+-]?(?<![\.\d])\d+(?!\.\d)\b',
+                      float: r'[-\+]?(?:\d+(?<!\.)\.?(?!\.)\d*|\.?\d+)(?:[eE][-\+]?\d+)?',
+                      str: r'\b.*\b'}
     return regex_patterns[argtype]
 
 
@@ -421,6 +421,7 @@ def _parse_positional_arguments(list_of_positionals: List[str],
     # second loop through matches to type - for nargs +, *, and ?, the behavior is greedy
     params_to_delete = []
     # first sort unmatched params by least to most restrictive type (int, float, str)
+
     def _type_sorter(p) -> int:
         argtype = _get_param_type(p[1])
         order = defaultdict(lambda x: 4)
@@ -467,7 +468,7 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
         raise NotImplementedError(f'Argparse type not implemented '
                                   f'for {param.__class__.__name__} and default not specifed')
     positional = getattr(param, 'positional', False)
-    if (getattr(param, 'prefix', '') != '' and not getattr(param, 'expand', False)):
+    if getattr(param, 'prefix', '') != '' and not getattr(param, 'expand', False):
         raise ValueError(f'Failure with param {name}. Cannot add a prefix to a class without the'
                          f' expand kwarg set to True')
     argname = name if positional else '--' + name
@@ -583,15 +584,22 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
     new_arg_names = _expand_param_name(param)
     if getattr(param, 'positional', False):
         raise ValueError(f'Cannot expand positional {param.__class__.__name__} to {new_arg_names}')
+    # expand the types
     expanded_types = match(param,
                            GeomspaceParam, [FloatParam, FloatParam, IntParam],
                            ArangeParam, [FloatParam, FloatParam, FloatParam],
                            SpanArangeParam, [FloatParam, FloatParam, FloatParam],
                            LinspaceParam, [FloatParam, FloatParam, IntParam])
+
+    # expand the units
     expanded_units = _expand_param_units(param)
+
+    # expand the defaults
     defaults = getattr(param, 'default', [None, None, None])
     if defaults is None:
         defaults = [None, None, None]
+
+    # expand the choices
     choices = getattr(param, 'choices', None)
     expanded_choices = [[], [], []]
     if choices is not None:
@@ -600,6 +608,8 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
             expanded_choices[0].append(c[0])
             expanded_choices[1].append(c[1])
             expanded_choices[2].append(c[2])
+
+    # actually create the expanded params
     expanded_params = []
     for i, (default, argtype, u) in enumerate(zip(defaults, expanded_types, expanded_units)):
         new_param = argtype(help=param.help + ' (expanded into three arguments)',

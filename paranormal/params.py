@@ -18,6 +18,9 @@ __all__ = ['BaseDescriptor', 'BoolParam', 'FloatParam', 'IntParam', 'StringParam
 #################################
 
 class BaseDescriptor(ABC):
+    """
+    Abstract base type for overriding python descriptor behavior
+    """
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -35,12 +38,24 @@ class BaseDescriptor(ABC):
         return self.__dict__ == other.__dict__
 
     def to_json(self, instance, include_default: bool = True):
+        """
+        Method to convert this parameter's value to something that's JSON serializable
+        """
         return instance.__dict__.get(self.name,
                                      getattr(self, 'default', None) if include_default else None)
 
 
 class BoolParam(BaseDescriptor):
+    """
+    A Boolean that overrides the python descriptor behavior
+    """
     def __init__(self, *, help: str, default: bool, hide: bool = False, **kwargs):
+        """
+        :param help: A string that describes what this boolean is for
+        :param default: The default value for this boolean
+        :param hide: Whether or not to hide this parameter from the argument parser
+        :param kwargs: Extra kwargs to modify behavior (not used)
+        """
         if 'required' in kwargs or default is None:
             raise ValueError('BoolParam cannot be a required argument '
                              'and must have a default value')
@@ -54,6 +69,9 @@ class BoolParam(BaseDescriptor):
 
 
 class FloatParam(BaseDescriptor):
+    """
+    A Float that overrides the python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
                  default: Optional[float] = None,
@@ -61,6 +79,18 @@ class FloatParam(BaseDescriptor):
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this float is for
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this parameter's value - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'positional' Whether or not to parse this parameter as a positional
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
@@ -79,6 +109,9 @@ class FloatParam(BaseDescriptor):
 
 
 class IntParam(BaseDescriptor):
+    """
+    An Int that overrides the python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
                  default: Optional[int] = None,
@@ -86,6 +119,18 @@ class IntParam(BaseDescriptor):
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this int is for
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this parameter's value - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'positional' Whether or not to parse this parameter as a positional
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
@@ -104,12 +149,27 @@ class IntParam(BaseDescriptor):
 
 
 class StringParam(BaseDescriptor):
+    """
+    A string that overrides the python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
                  default: Optional[str] = None,
                  hide: bool = False,
                  required: Optional[bool] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this int is for
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this parameter's value - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'positional' Whether or not to parse this parameter as a positional
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
@@ -127,14 +187,33 @@ class StringParam(BaseDescriptor):
 
 
 class ListParam(BaseDescriptor):
+    """
+    A list that overrides the python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
-                 subtype: type = str,
+                 subtype: Optional[type] = None,
                  default: Optional[List] = None,
                  hide: bool = False,
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this list is for
+        :param subtype: The type of objects that make up this list (specify if you want to parse
+            using an argument parser)
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this items in the list - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'positional' Whether or not to parse this parameter as a positional
+            'nargs': How many arguments this parameter should take when parsing from the command
+                line
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
@@ -155,6 +234,9 @@ class ListParam(BaseDescriptor):
 
 
 class SetParam(BaseDescriptor):
+    """
+    A set that overrides python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
                  subtype: type = str,
@@ -163,6 +245,22 @@ class SetParam(BaseDescriptor):
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this set is for
+        :param subtype: The type of objects that make up this list (specify if you want to parse
+            using an argument parser)
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this items in the list - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'positional' Whether or not to parse this parameter as a positional
+            'nargs': How many arguments this parameter should take when parsing from the command
+                line
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         self.default = default
@@ -183,6 +281,9 @@ class SetParam(BaseDescriptor):
 
 
 class EnumParam(BaseDescriptor):
+    """
+    An enum that overrides python descriptor behavior
+    """
     def __init__(self, *,
                  help: str,
                  cls: EnumMeta,
@@ -190,6 +291,16 @@ class EnumParam(BaseDescriptor):
                  hide: bool = False,
                  required: Optional[bool] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this enum is for
+        :param cls: The enum class this parameter represents
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param kwargs: Extra kwargs to modify behavior:
+            'positional' Whether or not to parse this parameter as a positional
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         if default not in cls and default is not None:
@@ -238,6 +349,10 @@ def _check_numpy_fn_param_value(name: str, value: Iterable, nargs: int) -> bool:
 
 
 class NumpyFunctionParam(BaseDescriptor):
+    """
+    A parameter that is set with 3 arguments and returns the result of a numpy function called
+    on those arguments if those arguments satisfy _check_numpy_fn_param_value
+    """
     nargs = 3
 
     def __init__(self, *,
@@ -247,6 +362,24 @@ class NumpyFunctionParam(BaseDescriptor):
                  required: Optional[bool] = None,
                  unit: Optional[str] = None,
                  **kwargs):
+        """
+        :param help: A string that describes what this parameter is for
+        :param subtype: The type of objects that make up this list (specify if you want to parse
+            using an argument parser)
+        :param default: The default value for this parameter
+        :param hide: Hide this parameter from the argument parser
+        :param required: Whether or not this parameter is required when parsing using an
+            argument parser
+        :param unit: A unit for this parameter (check paranormal.units for possible units)
+        :param kwargs: Extra kwargs to modify behavior:
+            'choices': list or tuple of all possible choices for this parameter's value - only
+                relevant for the argument parser (consider an EnumParam for something more strict)
+            'expand': Whether or not to expand this parameter into sub arguments when argument
+                parsing
+            'positional' Whether or not to parse this parameter as a positional
+            'nargs': How many arguments this parameter should take when parsing from the command
+                line - overwrites the default of 3
+        """
         if default is not None and required:
             raise ValueError('Default cannot be specified if required is True!')
         if not isinstance(default, tuple) and default is not None:
@@ -274,6 +407,9 @@ class NumpyFunctionParam(BaseDescriptor):
         raise NotImplementedError()
 
     def to_json(self, instance, include_default: bool = True):
+        """
+        Convert this parameter to a json serializable value
+        """
         v = instance.__dict__.get(self.name, self.default)
         if _check_numpy_fn_param_value(self.name, v, self.nargs):
             return super(NumpyFunctionParam, self).to_json(instance, include_default)
@@ -284,6 +420,10 @@ class NumpyFunctionParam(BaseDescriptor):
 
 
 class GeomspaceParam(NumpyFunctionParam):
+    """
+    A parameter that is set with 3 arguments (start, stop, num) and returns the geomspace function
+    called on those arguments if those arguments satisfy _check_numpy_fn_param_value
+    """
     def __set__(self, instance, value):
         if _check_numpy_fn_param_value(self.name, value, self.nargs):
             assert value[0] != 0
@@ -294,16 +434,29 @@ class GeomspaceParam(NumpyFunctionParam):
 
 
 class ArangeParam(NumpyFunctionParam):
+    """
+    A parameter that is set with 3 arguments (start, stop, step) and returns the arange function
+    called on those arguments if those arguments satisfy _check_numpy_fn_param_value
+    """
     def _numpy_function(self, value: Iterable):
         return np.arange(*value)
 
 
 class SpanArangeParam(NumpyFunctionParam):
+    """
+    A parameter that is set with 3 arguments (center, width, step) and returns the arange function
+    called on (center - 0.5 * width, center + 0.5 * width, step) if those arguments satisfy
+    _check_numpy_fn_param_value
+    """
     def _numpy_function(self, value: Iterable):
         center, width, step = value[0], value[1], value[2]
         return np.arange(center - 0.5 * width, center + 0.5 * width, step)
 
 
 class LinspaceParam(NumpyFunctionParam):
+    """
+    A parameter that is set with 3 arguments (start, stop, num) and returns the linspace function
+    called on those arguments if those arguments satisfy _check_numpy_fn_param_value
+    """
     def _numpy_function(self, value: Iterable):
         return np.linspace(value[0], value[1], int(value[2]))
