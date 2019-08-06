@@ -70,7 +70,7 @@ class Params(Mapping):
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
                json.loads(json.dumps(to_json_serializable_dict(self)))
 
-    def si_set(self, param_name: str, value: Union[float, int, Iterable]):
+    def si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
         """
         Set the parameter from a value that's in SI units
 
@@ -85,6 +85,15 @@ class Params(Mapping):
         else:
             unit = get_param_unit(type(self), param_name)
             setattr(self, param_name, unconvert_si_units(value, unit))
+            
+    def si_update(self, **kwargs) -> None:
+        """
+        Set parameters from multiple values in si units
+
+        :param kwargs: parameter names and values to set
+        """
+        for k, v in kwargs.items():
+            self.si_set(k, v)
 
 
 def get_param_unit(cls: type(Params), param_name: str) -> str:
