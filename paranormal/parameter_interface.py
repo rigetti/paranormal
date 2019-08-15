@@ -5,6 +5,7 @@ import importlib
 import json
 import re
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+import warnings
 import yaml
 
 from pampy import match, MatchError
@@ -48,6 +49,7 @@ class Params(Mapping):
         if cls not in Params.__subclasses__():
             raise NotImplementedError('Behavior is undefined for classes that do not directly '
                                       'inherit from Params.')
+        _copy_nested_classes(self)
         for key, value in kwargs.items():
             if not key in cls.__dict__:
                 raise KeyError(f'{cls.__name__} does not take {key} as an argument')
@@ -68,7 +70,7 @@ class Params(Mapping):
 
     def __eq__(self, other) -> bool:
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
-               json.loads(json.dumps(to_json_serializable_dict(self)))
+               json.loads(json.dumps(to_json_serializable_dict(other)))
 
     def si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
         """
@@ -85,7 +87,7 @@ class Params(Mapping):
         else:
             unit = get_param_unit(type(self), param_name)
             setattr(self, param_name, unconvert_si_units(value, unit))
-            
+
     def si_update(self, **kwargs) -> None:
         """
         Set parameters from multiple values in si units
@@ -94,6 +96,15 @@ class Params(Mapping):
         """
         for k, v in kwargs.items():
             self.si_set(k, v)
+
+    def update(self, **kwargs) -> None:
+        """
+        Set multiple parameters at once.
+
+        :param kwargs: parameter names and values to set
+        """
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 def get_param_unit(cls: type(Params), param_name: str) -> str:
@@ -128,6 +139,16 @@ def _ensure_properties_are_working(params: Params) -> None:
             getattr(params, k)
 
 
+def _copy_nested_classes(params: Params):
+    """
+    Deepcopy and set any nested params classes to make sure users cannot mutate the nested classes.
+    This function will mutate the passed in params class
+    """
+    for k, v in type(params).__dict__.items():
+        if isinstance(v, Params):
+            setattr(params, k, copy.deepcopy(v))
+
+
 #################
 # Serialization #
 #################
@@ -158,8 +179,13 @@ def to_json_serializable_dict(params: Params,
             if isinstance(v, BaseDescriptor):
                 retval[k] = v.to_json(params)
             elif isinstance(v, Params):
+                nested_params = params.__dict__.get(k, v)
                 _params_to_omit = _get_omitted_params(v)
-                retval[k] = to_json_serializable_dict(v,
+                if _get_omitted_params(nested_params) - _params_to_omit != set():
+                    warnings.warn('Params can only be marked as omitted inside the class definition'
+                                  f' - ({_get_omitted_params(nested_params) - _params_to_omit})  '
+                                  'will not be omitted.')
+                retval[k] = to_json_serializable_dict(nested_params,
                                                       include_defaults=include_defaults,
                                                       include_hidden_params=include_hidden_params,
                                                       params_to_omit=_params_to_omit)
@@ -532,8 +558,9 @@ def _get_omitted_params(params: Params) -> Set[str]:
     """
     Get a set of all params that have their value set to __hide__
     """
-    return set(_k for _k, _v in params.items()
-               if isinstance(_v, str) and _v == '__hide__')
+    return set(_k for _k in params.keys()
+               if isinstance(params.__dict__.get(_k, None), str) and
+               params.__dict__.get(_k, None) == '__hide__')
 
 
 def _get_expanded_param_names(param: BaseDescriptor) -> List[str]:

@@ -157,6 +157,26 @@ def test_json_serialization():
     j = json.loads(json.dumps(to_json_serializable_dict(y)))
     assert y == from_json_serializable_dict(j)
 
+    # test with setting nested params
+    y = DoubleSweep()
+    y.freq_sweep.freqs = (100, 200, 300)
+    s = json.dumps(to_json_serializable_dict(y))
+    assert s == '{"freq_sweep": {"freqs": [100, 200, 300], "times": [100, 200, 50], ' \
+                '"_type": "FreqSweep", "_module": "test_parameter_interface"}, ' \
+                '"time_sweep": {"times": [100, 500, 20], "_type": "TimeSweep", ' \
+                '"_module": "test_parameter_interface"}, "_type": "DoubleSweep", ' \
+                '"_module": "test_parameter_interface"}'
+
+    # test changing defaults of nested params in one class instance doesn't change the default
+    # for all class instances
+    x = DoubleSweep()
+    assert x != y
+
+    # ensure warnings are working when setting something to __hide__
+    y.freq_sweep.freqs = '__hide__'
+    with pytest.warns(UserWarning):
+        to_json_serializable_dict(y)
+
 
 def test_yaml_serialization():
     p = P(r=10)
