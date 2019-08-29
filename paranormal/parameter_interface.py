@@ -11,7 +11,7 @@ import yaml
 from pampy import match, MatchError
 
 from paranormal.params import *
-from paranormal.units import unconvert_si_units, convert_to_si_units
+from paranormal.units import convert_to_si_units
 
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
@@ -72,9 +72,20 @@ class Params(Mapping):
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
                json.loads(json.dumps(to_json_serializable_dict(other)))
 
-    def si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
+    def non_si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
         """
-        Set the parameter from a value that's in SI units
+        Set the parameter from a value that's in the param units specified in the Params class
+        definition
+
+        Ex.
+        ```
+        class A(Params):
+            f = FloatParam(help='float', unit='ns')
+
+        a = A()
+        a.non_si_set('a', 5)
+        print(a.f)  # prints 5e-9
+        ```
 
         :param param_name: The parameter name to set
         :param value: The new value in SI units
@@ -82,20 +93,25 @@ class Params(Mapping):
         param = type(self).__dict__.get(param_name)
         expanded_units = _expand_param_units(param)
         if expanded_units is not None:
-            values = [unconvert_si_units(v, u) for v, u in zip(value, expanded_units)]
+            values = [convert_to_si_units(v, u) for v, u in zip(value, expanded_units)]
             setattr(self, param_name, values)
         else:
             unit = get_param_unit(type(self), param_name)
-            setattr(self, param_name, unconvert_si_units(value, unit))
+            if not isinstance(value, Iterable):
+                setattr(self, param_name, convert_to_si_units(value, unit))
+            else:
+                # need to keep parameter type
+                val_type = type(value)
+                setattr(self, param_name, val_type([convert_to_si_units(v, unit) for v in value]))
 
-    def si_update(self, **kwargs) -> None:
+    def non_si_update(self, **kwargs) -> None:
         """
-        Set parameters from multiple values in si units
+        Set parameters from multiple values using units specified in the Params class definition
 
         :param kwargs: parameter names and values to set
         """
         for k, v in kwargs.items():
-            self.si_set(k, v)
+            self.non_si_set(k, v)
 
     def update(self, **kwargs) -> None:
         """

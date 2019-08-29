@@ -24,11 +24,11 @@ class E(Enum):
 class P(Params):
     b = BoolParam(default=True, help='a boolean!')
     i = IntParam(default=1, help='an integer!')
-    f = FloatParam(default=0.5, help='A float!', unit='MHz')
+    f = FloatParam(default=0.5e6, help='A float!', unit='MHz')
     r = IntParam(required=True, help='An integer that is required!')
     e = EnumParam(cls=E, help='an enum', default=E.X)
     l = ListParam(subtype=int, default=[0, 1, 2], help='a list')
-    a = ArangeParam(help='arange param', default=(0, 100, 5), unit='us')
+    a = ArangeParam(help='arange param', default=(0, 100e-6, 5e-6), unit='us')
 
 
 class Colors(Enum):
@@ -72,14 +72,14 @@ class PositionalsB(Params):
 
 
 class FreqSweep(Params):
-    freqs = LinspaceParam(help='freqs', expand=True, default=(10, 20, 30), unit='MHz',
+    freqs = LinspaceParam(help='freqs', expand=True, default=(10e6, 20e6, 30), unit='MHz',
                           prefix='f_')
-    times = LinspaceParam(help='times', expand=True, default=(100, 200, 50), unit='us',
+    times = LinspaceParam(help='times', expand=True, default=(100e-6, 200e-6, 50), unit='us',
                           prefix='t_')
 
 
 class TimeSweep(Params):
-    times = LinspaceParam(help='times', expand=True, default=(100, 500, 20), unit='ns',
+    times = LinspaceParam(help='times', expand=True, default=(100e-9, 500e-9, 20), unit='ns',
                           prefix='t_')
 
 
@@ -113,7 +113,7 @@ def _compare_two_param_item_lists(a, b):
 
 def test_params():
 
-    p = P(b=False, i=2, f=0.2, r=5)
+    p = P(b=False, i=2, f=0.2e6, r=5)
     correct_values = [('b', False), ('i', 2), ('f', 0.2e6), ('r', 5), ('e', E.X), ('l', [0, 1, 2]),
                       ('a', np.array([0,  5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70,
                                       75, 80, 85, 90, 95]) * 1e-6)]
@@ -127,10 +127,10 @@ def test_params():
     with pytest.raises(KeyError):
         P()
 
-    # test si_set
-    p.si_set('f', 0.3e6)
+    # test non_si_set
+    p.non_si_set('f', 0.3)
     assert p.f == 0.3e6
-    p.si_set('a', [1.2e-6, 1.5e-6, 100])
+    p.non_si_set('a', [1.2, 1.5, 100])
     assert np.allclose(p.a, np.arange(1.2, 1.5, 100) * 1e-6)
 
 
@@ -142,7 +142,7 @@ def test_json_serialization():
     assert s == '{"r": 5, "_type": "P", "_module": "test_parameter_interface"}'
 
     s = json.dumps(to_json_serializable_dict(p, include_defaults=True))
-    assert s == '{"b": true, "i": 1, "f": 0.5, "r": 5, "e": "X", "l": [0, 1, 2], ' \
+    assert s == '{"b": true, "i": 1, "f": 0.5e-6, "r": 5, "e": "X", "l": [0, 1, 2], ' \
                 '"a": [0, 100, 5], "_type": "P", "_module": "test_parameter_interface"}'
     # from json
     p = P(r=3)

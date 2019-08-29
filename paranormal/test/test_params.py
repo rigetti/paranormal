@@ -3,9 +3,9 @@ from enum import Enum
 import numpy as np
 import pytest
 
-from paranormal.parameter_interface import BoolParam, Params, FloatParam, IntParam, StringParam, ListParam, SetParam, \
-    EnumParam, GeomspaceParam, ArangeParam, SpanArangeParam
-from paranormal.params import SpanLinspaceParam
+from paranormal.parameter_interface import (BoolParam, Params, FloatParam, IntParam, StringParam,
+                                            ListParam, SetParam, EnumParam, GeomspaceParam,
+                                            ArangeParam, SpanArangeParam, SpanLinspaceParam)
 
 
 def test_bool_param():
@@ -23,7 +23,7 @@ def test_float_param():
     class MyParams(Params):
         param1 = FloatParam(help="A float param with no default and not required")
 
-        param2 = FloatParam(help="A float param with units", default=4.0, unit="MHz")
+        param2 = FloatParam(help="A float param with units", default=4.0e6, unit="MHz")
 
     p = MyParams()
 
@@ -33,6 +33,8 @@ def test_float_param():
 
     assert p.param2 == 4.0e6
     p.param2 = 5.0
+    assert p.param2 == 5.0
+    p.non_si_set('param2', 5.0)
     assert p.param2 == 5.0e6
 
 
@@ -71,16 +73,20 @@ def test_list_param():
 
     assert p1.param2 is None
     p1.param2 = [1.0, 2.0, 3.0]
+    assert p1.param2 == [1.0, 2.0, 3.0]
+    p1.non_si_set('param2', [1.0, 2.0, 3.0])
     assert p1.param2 == [1.0e6, 2.0e6, 3.0e6]
 
 
 def test_set_param():
     class MyParams(Params):
-        param1 = SetParam(help="A set param")
+        param1 = SetParam(help="A set param", unit='GHz')
 
     p = MyParams(param1={1, 2, 3, 3})
 
     assert p.param1 == {1, 2, 3}
+    p.non_si_set('param1', {1.0, 2.0, 5.0})
+    assert p.param1 == {1.0e9, 2.0e9, 5.0e9}
 
 
 def test_enum_param():
@@ -128,3 +134,4 @@ def test_span_linspace_param():
 
     p = MyParams(param1=[1, 2, 10])
     assert np.all(p.param1 == np.linspace(0, 2, 10))
+

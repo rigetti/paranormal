@@ -23,7 +23,7 @@ def convert_to_si_units(value, unit: Optional[str] = None):
     """
     Convert value to SI units from specified unit.
     """
-    if unit is None:
+    if value is None or unit is None:
         return value
     try:
         return value * UNIT_CONVERSION_TABLE[unit]
