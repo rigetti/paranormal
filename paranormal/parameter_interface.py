@@ -11,7 +11,7 @@ import yaml
 from pampy import match, MatchError
 
 from paranormal.params import *
-from paranormal.units import unconvert_si_units
+from paranormal.units import unconvert_si_units, convert_to_si_units
 
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
@@ -691,7 +691,9 @@ def _extract_expanded_param(parsed_values: dict,
     start_stop_x_list = [parsed_values[n] for n in old_arg_names]
     if all([x is None for x in start_stop_x_list]):
         return None
-    return start_stop_x_list
+    units = _expand_param_units(param)
+    si_unit_start_stop_x = [convert_to_si_units(p, u) for p, u in zip(start_stop_x_list, units)]
+    return si_unit_start_stop_x
 
 
 def _create_param_name_prefix(enclosing_param_name: Optional[str],
@@ -862,7 +864,12 @@ def _unflatten_params_cls(cls: type(Params),
                 unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
                 cls_specific_params.update({k: unexpanded_param})
             else:
-                cls_specific_params[k] = parsed_params[param_name]
+                if isinstance(parsed_params[param_name], Iterable):
+                    cls_specific_params[k] = [convert_to_si_units(p, getattr(v, 'unit', None))
+                                              for p in parsed_params[param_name]]
+                else:
+                    cls_specific_params[k] = convert_to_si_units(parsed_params[param_name],
+                                                                 getattr(v, 'unit', None))
         elif isinstance(v, Params):
             _params_to_omit = _get_omitted_params(v)
             next_prefix = _create_param_name_prefix(k, getattr(cls, '__nested_prefixes__', None))

@@ -103,9 +103,7 @@ class FloatParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[float]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(instance.__dict__.get(self.name, self.default), self.unit)
+        return instance.__dict__.get(self.name, self.default)
 
 
 class IntParam(BaseDescriptor):
@@ -143,9 +141,7 @@ class IntParam(BaseDescriptor):
     def __get__(self, instance, owner) -> Optional[int]:
         if self.required and self.name not in instance.__dict__:
             raise ValueError(f'{self.name} is a required argument and must be set first!')
-        if instance.__dict__.get(self.name, self.default) is None:
-            return None
-        return convert_to_si_units(instance.__dict__.get(self.name, self.default), self.unit)
+        return instance.__dict__.get(self.name, self.default)
 
 
 class StringParam(BaseDescriptor):
@@ -229,8 +225,7 @@ class ListParam(BaseDescriptor):
             raise ValueError(f'{self.name} is a required argument and must be set first!')
         if instance.__dict__.get(self.name, self.default) is None:
             return None
-        return list(convert_to_si_units(v, self.unit)
-                    for v in instance.__dict__.get(self.name, self.default))
+        return list(instance.__dict__.get(self.name, self.default))
 
 
 class SetParam(BaseDescriptor):
@@ -276,8 +271,7 @@ class SetParam(BaseDescriptor):
             raise ValueError(f'{self.name} is a required argument and must be set first!')
         if instance.__dict__.get(self.name, self.default) is None:
             return None
-        return set(convert_to_si_units(v, self.unit)
-                   for v in instance.__dict__.get(self.name, self.default))
+        return set(instance.__dict__.get(self.name, self.default))
 
 
 class EnumParam(BaseDescriptor):
@@ -397,7 +391,7 @@ class NumpyFunctionParam(BaseDescriptor):
         v = instance.__dict__.get(self.name, self.default)
         if not _check_numpy_fn_param_value(self.name, v, self.nargs):
             return v
-        return convert_to_si_units(self._numpy_function(v), self.unit)
+        return self._numpy_function(v)
 
     def __set__(self, instance, value):
         _check_numpy_fn_param_value(self.name, value, self.nargs)
