@@ -10,7 +10,7 @@ from paranormal.units import convert_to_si_units
 
 __all__ = ['BaseDescriptor', 'BoolParam', 'FloatParam', 'IntParam', 'StringParam', 'ListParam',
            'SetParam', 'ArangeParam', 'EnumParam', 'GeomspaceParam', 'SpanArangeParam',
-           'LinspaceParam']
+           'LinspaceParam', 'SpanLinspaceParam']
 
 
 #################################
@@ -460,3 +460,14 @@ class LinspaceParam(NumpyFunctionParam):
     """
     def _numpy_function(self, value: Iterable):
         return np.linspace(value[0], value[1], int(value[2]))
+
+
+class SpanLinspaceParam(NumpyFunctionParam):
+    """
+    A parameter that is set with 3 arguments (center, width, num) and returns the linspace function
+    called on (center - 0.5 * width, center + 0.5 * width, num) if those arguments satisfy
+    _check_numpy_fn_param_value
+    """
+    def _numpy_function(self, value: Iterable):
+        center, width, num = value[0], value[1], value[2]
+        return np.linspace(center - 0.5 * width, center + 0.5 * width, int(num))
