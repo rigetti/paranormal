@@ -383,6 +383,7 @@ def _get_param_type(param) -> type:
     """
     argtype = match(param,
                     LinspaceParam, lambda x: float,
+                    SpanLinspaceParam, lambda x: float,
                     ArangeParam, lambda x: float,
                     SpanArangeParam, lambda x: float,
                     GeomspaceParam, lambda x: float,
@@ -571,7 +572,8 @@ def _get_expanded_param_names(param: BaseDescriptor) -> List[str]:
                  SpanArangeParam, ['center', 'width', 'step'],
                  GeomspaceParam, ['start', 'stop', 'num'],
                  ArangeParam, ['start', 'stop', 'step'],
-                 LinspaceParam, ['start', 'stop', 'num'])
+                 LinspaceParam, ['start', 'stop', 'num'],
+                 SpanLinspaceParam, ['center', 'width', 'num'])
 
 
 def _expand_param_name(param: BaseDescriptor) -> List[str]:
@@ -605,6 +607,8 @@ def _expand_param_units(param: BaseDescriptor) -> List[Optional[str]]:
                            lambda p: [unit, unit, unit],
                            LinspaceParam,
                            lambda p: [unit, unit, None],
+                           SpanLinspaceParam,
+                           lambda p: [unit, unit, None],
                            BaseDescriptor, None)
     return expanded_units
 
@@ -625,7 +629,8 @@ def _expand_multi_arg_param(name: str, param: BaseDescriptor) -> Tuple[Tuple, Tu
                            GeomspaceParam, [FloatParam, FloatParam, IntParam],
                            ArangeParam, [FloatParam, FloatParam, FloatParam],
                            SpanArangeParam, [FloatParam, FloatParam, FloatParam],
-                           LinspaceParam, [FloatParam, FloatParam, IntParam])
+                           LinspaceParam, [FloatParam, FloatParam, IntParam],
+                           SpanLinspaceParam, [FloatParam, FloatParam, IntParam])
 
     # expand the units
     expanded_units = _expand_param_units(param)

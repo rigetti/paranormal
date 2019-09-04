@@ -5,6 +5,7 @@ import pytest
 
 from paranormal.parameter_interface import BoolParam, Params, FloatParam, IntParam, StringParam, ListParam, SetParam, \
     EnumParam, GeomspaceParam, ArangeParam, SpanArangeParam
+from paranormal.params import SpanLinspaceParam
 
 
 def test_bool_param():
@@ -119,3 +120,11 @@ def test_span_arange_param():
 
     p = MyParams(param1=[1, 2, 0.1])
     assert len(p.param1) == 20
+
+
+def test_span_linspace_param():
+    class MyParams(Params):
+        param1 = SpanLinspaceParam(help="An evenly spaced list created with center, width, num")
+
+    p = MyParams(param1=[1, 2, 10])
+    assert np.all(p.param1 == np.linspace(0, 2, 10))
