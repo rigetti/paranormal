@@ -880,7 +880,8 @@ def _unflatten_params_cls(cls: type(Params),
                 unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
                 cls_specific_params.update({k: unexpanded_param})
             else:
-                if isinstance(parsed_params[param_name], Iterable):
+                if isinstance(parsed_params[param_name], Iterable) and \
+                        not isinstance(parsed_params[param_name], str):
                     cls_specific_params[k] = [convert_to_si_units(p, getattr(v, 'unit', None))
                                               for p in parsed_params[param_name]]
                 else:
