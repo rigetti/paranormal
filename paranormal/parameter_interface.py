@@ -72,7 +72,7 @@ class Params(Mapping):
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
                json.loads(json.dumps(to_json_serializable_dict(other)))
 
-    def non_si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
+    def unit_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
         """
         Set the parameter from a value that's in the param units specified in the Params class
         definition
@@ -83,7 +83,7 @@ class Params(Mapping):
             f = FloatParam(help='float', unit='ns')
 
         a = A()
-        a.non_si_set('a', 5)
+        a.unit_set('a', 5)
         print(a.f)  # prints 5e-9
         ```
 
@@ -104,14 +104,14 @@ class Params(Mapping):
                 val_type = type(value)
                 setattr(self, param_name, val_type([convert_to_si_units(v, unit) for v in value]))
 
-    def non_si_update(self, **kwargs) -> None:
+    def unit_update(self, **kwargs) -> None:
         """
         Set parameters from multiple values using units specified in the Params class definition
 
         :param kwargs: parameter names and values to set
         """
         for k, v in kwargs.items():
-            self.non_si_set(k, v)
+            self.unit_set(k, v)
 
     def update(self, **kwargs) -> None:
         """

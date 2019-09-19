@@ -128,9 +128,9 @@ def test_params():
         P()
 
     # test non_si_set
-    p.non_si_set('f', 0.3)
+    p.unit_set('f', 0.3)
     assert p.f == 0.3e6
-    p.non_si_set('a', [1.2, 1.5, 100])
+    p.unit_set('a', [1.2, 1.5, 100])
     assert np.allclose(p.a, np.arange(1.2, 1.5, 100) * 1e-6)
 
 
