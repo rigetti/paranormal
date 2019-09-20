@@ -190,8 +190,10 @@ def to_json_serializable_dict(params: Params,
     for k, v in type(params).__dict__.items():
         if params_to_omit is not None and k in params_to_omit:
             continue
-        if ((not k.startswith('_') or include_hidden_params) and
-                (include_defaults or k in params.__dict__)):
+        if (
+                (not k.startswith('_') or include_hidden_params) and
+                (include_defaults or k in params.__dict__)
+        ):
             if isinstance(v, BaseDescriptor):
                 retval[k] = v.to_json(params)
             elif isinstance(v, Params):

@@ -42,7 +42,7 @@ class MySummer(Params):
     dpw_s = LinspaceParam(help='Drinks per weekend', expand=True, default=(0, None, 15),
                           prefix='s_')
     c = EnumParam(cls=Colors, default=Colors.BLUE, help='Color of the sky')
-    t = FloatParam(help='Time spent sunbathing before I burn', default=60, unit='ns')
+    t = FloatParam(help='Time spent sunbathing before I burn', default=60e-9, unit='ns')
     f = FloatParam(help='Frequency of birds chirping', unit='MHz', default=None)
     do_something_crazy = BoolParam(default=False, help='Do something crazy')
 
@@ -102,6 +102,8 @@ def _compare_two_param_item_lists(a, b):
         assert k == k_cor
         if isinstance(v, np.ndarray):
             assert np.allclose(v, v_cor)
+        elif isinstance(v, float):
+            assert np.isclose(v, v_cor)
         else:
             assert v == v_cor
 
@@ -142,8 +144,8 @@ def test_json_serialization():
     assert s == '{"r": 5, "_type": "P", "_module": "test_parameter_interface"}'
 
     s = json.dumps(to_json_serializable_dict(p, include_defaults=True))
-    assert s == '{"b": true, "i": 1, "f": 0.5e-6, "r": 5, "e": "X", "l": [0, 1, 2], ' \
-                '"a": [0, 100, 5], "_type": "P", "_module": "test_parameter_interface"}'
+    assert s == '{"b": true, "i": 1, "f": 500000.0, "r": 5, "e": "X", "l": [0, 1, 2], ' \
+                '"a": [0, 0.0001, 5e-06], "_type": "P", "_module": "test_parameter_interface"}'
     # from json
     p = P(r=3)
     j = json.loads(json.dumps(to_json_serializable_dict(p, include_defaults=True)))
@@ -161,9 +163,9 @@ def test_json_serialization():
     y = DoubleSweep()
     y.freq_sweep.freqs = (100, 200, 300)
     s = json.dumps(to_json_serializable_dict(y))
-    assert s == '{"freq_sweep": {"freqs": [100, 200, 300], "times": [100, 200, 50], ' \
+    assert s == '{"freq_sweep": {"freqs": [100, 200, 300], "times": [0.0001, 0.0002, 50], ' \
                 '"_type": "FreqSweep", "_module": "test_parameter_interface"}, ' \
-                '"time_sweep": {"times": [100, 500, 20], "_type": "TimeSweep", ' \
+                '"time_sweep": {"times": [1e-07, 5e-07, 20], "_type": "TimeSweep", ' \
                 '"_module": "test_parameter_interface"}, "_type": "DoubleSweep", ' \
                 '"_module": "test_parameter_interface"}'
 
@@ -185,9 +187,9 @@ def test_yaml_serialization():
         o.return_value = temp
         to_yaml_file(p, 'mock.yaml', include_defaults=True)
     with open(temp.name) as yaml_file:
-        assert yaml_file.read() == 'b: true\ni: 1\nf: 0.5\nr: 10\ne: X\nl:\n- 0\n- 1\n- 2\na: ' \
-                                   '!!python/tuple\n- ' \
-                                   '0\n- 100\n- 5\n_type: P\n_module: test_parameter_interface\n'
+        assert yaml_file.read() == 'b: true\ni: 1\nf: 500000.0\nr: 10\ne: X\nl:\n- 0\n- 1\n- 2\n' \
+                                   'a: !!python/tuple\n- 0\n- 0.0001\n- 5.0e-06\n_type: P\n' \
+                                   '_module: test_parameter_interface\n'
 
     # test yaml dumping with alphabetical reorder
     p = P(r=10)
@@ -197,8 +199,9 @@ def test_yaml_serialization():
         to_yaml_file(p, 'mock.yaml', include_defaults=True, sort_keys=True)
     with open(temp.name) as yaml_file:
         assert yaml_file.read() == '_module: test_parameter_interface\n_type: P\na: ' \
-                                   '!!python/tuple\n- 0\n- 100' \
-                                   '\n- 5\nb: true\ne: X\nf: 0.5\ni: 1\nl:\n- 0\n- 1\n- 2\nr: 10\n'
+                                   '!!python/tuple\n- 0\n- 0.0001' \
+                                   '\n- 5.0e-06\nb: true\ne: X\nf: 500000.0\ni: 1\n' \
+                                   'l:\n- 0\n- 1\n- 2\nr: 10\n'
 
 
 def test_merge_params():
@@ -241,6 +244,7 @@ def test_merge_params():
 
 
 def test_append_params_attributes():
+
     class A(Params):
         i = IntParam(help='int', default=1)
 
@@ -266,12 +270,12 @@ def test_to_argparse():
     # parse with the defaults
     args = parser.parse_args([])
     # dpw was expanded and will still be in the namespace, just as None
-    assert args == Namespace(c=Colors.BLUE, do_something_crazy=False, t=60, dpw_s=None,
+    assert args == Namespace(c=Colors.BLUE, do_something_crazy=False, t=60e-9, dpw_s=None,
                              s_start=0, s_stop=None, s_num=15, f=None)
 
     args = parser.parse_args(
         '--f 120 --c GREEN --s_start 20 --s_stop 600 --s_num 51 --do_something_crazy'.split(' '))
-    assert args == Namespace(c='GREEN', do_something_crazy=True, t=60, dpw_s=None,
+    assert args == Namespace(c='GREEN', do_something_crazy=True, t=60e-9, dpw_s=None,
                              s_start=20, s_stop=600, s_num=51, f=120)
 
     # try with an argument that isn't part of the parser
@@ -290,7 +294,7 @@ def test_to_argparse():
         '--winter_w_stop 200 --winter_hib'.split(' '))
     assert args == Namespace(summer_c='RED', summer_do_something_crazy=False, summer_dpw_s=None,
                              summer_f=360, summer_s_num=15, summer_s_start=20.0,
-                             summer_s_stop=600.0, summer_t=60, winter_dpw_w=None, winter_hib=True,
+                             summer_s_stop=600.0, summer_t=60e-9, winter_dpw_w=None, winter_hib=True,
                              winter_s=22.0, winter_w_num=15, winter_w_start=20.0,
                              winter_w_stop=200.0)
 
@@ -303,19 +307,18 @@ def test_to_argparse():
     args = parser.parse_args([])
     assert args == Namespace(summer_c=Colors.BLUE, summer_do_something_crazy=False,
                              summer_dpw_s=None, summer_f=None, summer_s_num=15, summer_s_start=0,
-                             summer_s_stop=None, summer_t=60, winter_dpw_w=None, winter_hib=False,
+                             summer_s_stop=None, summer_t=60e-9, winter_dpw_w=None, winter_hib=False,
                              winter_s=12, winter_w_num=15, winter_w_start=0, winter_w_stop=None,
                              spring_dpw_s=None, spring_flowers=12, spring_sp_num=15,
                              spring_sp_start=0, spring_sp_stop=None)
 
-
     # Make sure conflicting params are resolved
     parser = to_argparse(DoubleSweep)
     args = parser.parse_args([])
-    assert args == Namespace(freq_sweep_f_num=30, freq_sweep_f_start=10, freq_sweep_f_stop=20,
-                             freq_sweep_freqs=None, freq_sweep_t_num=50, freq_sweep_t_start=100,
-                             freq_sweep_t_stop=200, freq_sweep_times=None, time_sweep_t_num=20,
-                             time_sweep_t_start=100, time_sweep_t_stop=500, time_sweep_times=None)
+    assert args == Namespace(freq_sweep_f_num=30, freq_sweep_f_start=10e6, freq_sweep_f_stop=20e6,
+                             freq_sweep_freqs=None, freq_sweep_t_num=50, freq_sweep_t_start=100e-6,
+                             freq_sweep_t_stop=200e-6, freq_sweep_times=None, time_sweep_t_num=20,
+                             time_sweep_t_start=100e-9, time_sweep_t_stop=500e-9, time_sweep_times=None)
 
     # make sure check that requires prefixes if expand=True for multiple classes is working
     class BadFreqSweep(Params):
@@ -346,14 +349,16 @@ def test_to_argparse():
 
 def test_from_parsed_args():
 
-    parser = to_argparse(MyWinter)
-    y = from_parsed_args(MyWinter, params_namespace=parser.parse_args([]))[0]
-    correct_items = [('s', 12), ('hib', False), ('dpw_w', [0, None, 15])]
+    parser = to_argparse(MySummer)
+    y = from_parsed_args(MySummer, params_namespace=parser.parse_args([]))[0]
+    correct_items = [('dpw_s', [0, None, 15]), ('c', Colors.BLUE), ('t', 60e-9), ('f', None),
+                     ('do_something_crazy', False)]
     _compare_two_param_item_lists(y.items(), correct_items)
 
-    args = parser.parse_args('--w_stop 10 --w_num 11 --hib --s 35'.split(' '))
-    y = from_parsed_args(MyWinter, params_namespace=args)[0]
-    correct_items = [('s', 35), ('hib', True), ('dpw_w', np.arange(0, 11))]
+    args = parser.parse_args('--dpw_s .1 2 10 --t 20 --do_something_crazy'.split(' '))
+    y = from_parsed_args(MySummer, params_namespace=args)[0]
+    correct_items = [('dpw_s', [.1, 2, 10]), ('c', Colors.BLUE), ('t', 20e-9), ('f', None),
+                     ('do_something_crazy', True)]
     _compare_two_param_item_lists(y.items(), correct_items)
 
     class YearlySchedule(Params):
@@ -413,6 +418,7 @@ def test_from_parsed_args():
 
 
 def test_create_parser_and_parse_args():
+
     # test that nested classes with positionals work
     class PositionalsC(Params):
         a_pos = PositionalsA()
