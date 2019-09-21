@@ -11,8 +11,7 @@ import yaml
 from pampy import match, MatchError
 
 from paranormal.params import *
-from paranormal.units import convert_to_si_units
-
+from paranormal.units import convert_to_si_units, unconvert_si_units
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
            'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args',
@@ -530,6 +529,13 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     default = param.default if required is None else None
     unit = getattr(param, 'unit', None)
 
+    # display default in units of `unit`. Unit will get added back in `from_parsed_args`
+    expanded_units = _expand_param_units(param)
+    if expanded_units is not None and default is not None:
+        default = tuple([unconvert_si_units(d, u) for d, u in zip(default, expanded_units)])
+    else:
+        default = unconvert_si_units(default, unit)
+
     # format metavar nicely for parameters that have expanded versions but aren't expanded
     # check to see if the parameter has expanded param names
     metavar = None
@@ -829,39 +835,13 @@ def _flatten_cls_params(cls: type(Params),
     return already_flat_params
 
 
-def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
-    """
-    Convert a Params class or subclass to an argparse argument parser.
-    """
-    parser = ArgumentParser(description=cls.__doc__, **kwargs)
-
-    # first, we flatten the cls params (means flattening any nested Params classes)
-    flattened_params = _flatten_cls_params(cls)
-
-    # merge any positional arguments
-    params_to_delete, positional_param = _merge_positional_params(list(flattened_params.items()))
-    for p in params_to_delete:
-        del flattened_params[p]
-    if positional_param is not None:
-        flattened_params['positionals'] = positional_param
-
-    # actually add the params to the argument parser
-    for name, param in flattened_params.items():
-        _add_param_to_parser(name, param, parser)
-
-    assert sum(getattr(p, 'nargs', '') not in ['+', '*', '?'] for p in vars(cls).values()
-               if getattr(p, 'positional', False)) <= 1, \
-        'Behavior is undefined for multiple positional arguments with nargs=+|*|?'
-    return parser
-
-
 def _unflatten_params_cls(cls: type(Params),
                           parsed_params: dict,
                           prefix: Optional[str] = None,
                           params_to_omit: Optional[Set[str]] = None) -> Params:
     """
     Recursively construct a Params class or subclass (handles nested Params classes) using values
-    parsed from the command line.
+    parsed from the command line, and apply units.
 
     :param cls: The Params class to create an instance of
     :param parsed_params: The params parsed from the command line
@@ -897,6 +877,32 @@ def _unflatten_params_cls(cls: type(Params),
                                                            prefix=_prefix,
                                                            params_to_omit=_params_to_omit)
     return cls(**cls_specific_params)
+
+
+def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
+    """
+    Convert a Params class or subclass to an argparse argument parser.
+    """
+    parser = ArgumentParser(description=cls.__doc__, **kwargs)
+
+    # first, we flatten the cls params (means flattening any nested Params classes)
+    flattened_params = _flatten_cls_params(cls)
+
+    # merge any positional arguments
+    params_to_delete, positional_param = _merge_positional_params(list(flattened_params.items()))
+    for p in params_to_delete:
+        del flattened_params[p]
+    if positional_param is not None:
+        flattened_params['positionals'] = positional_param
+
+    # actually add the params to the argument parser
+    for name, param in flattened_params.items():
+        _add_param_to_parser(name, param, parser)
+
+    assert sum(getattr(p, 'nargs', '') not in ['+', '*', '?'] for p in vars(cls).values()
+               if getattr(p, 'positional', False)) <= 1, \
+        'Behavior is undefined for multiple positional arguments with nargs=+|*|?'
+    return parser
 
 
 def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple[Params]:
