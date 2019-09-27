@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Iterable, Union, Tuple, List
 
 ###################
 # Unit Conversion #
@@ -23,7 +23,7 @@ def convert_to_si_units(value, unit: Optional[str] = None):
     """
     Convert value to SI units from specified unit.
     """
-    if unit is None:
+    if value is None or unit is None:
         return value
     try:
         return value * UNIT_CONVERSION_TABLE[unit]
@@ -33,7 +33,7 @@ def convert_to_si_units(value, unit: Optional[str] = None):
         raise TypeError(f'Unit "{unit}" not compatible with value {value} of type {type(value)}')
 
 
-def unconvert_si_units(value, unit: Optional[str] = None):
+def unconvert_si_units(value: Union[float, Tuple, List], unit: Optional[str] = None):
     """
     Convert from si units back to "unit" units
     """

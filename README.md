@@ -29,11 +29,13 @@ class FrequencySweep(Params):
     A frequency sweep measurement
     """
     freqs = SpanArangeParam(help='A list of frequencies to scan as [center, width, step]',
-                            default=[1, 2, 0.1], unit='GHz')
+                            default=(1e9, 2e9, 0.1e9), unit='GHz')
     power = FloatParam(help='Power to transmit', default=-20, unit='dBm')
     pulse_samples = IntParam(help='Samples in the pulse', default=100)
     averages = IntParam(help='Number of sweeps to average over', default=10)
     is_test = BoolParam(help='Is this just a test', default=False)
+    unseen_test = BoolParam(help='Hidden from the command line', default = False, hide=True)
+    _unseen_test_2 = BoolParam(help='Hidden from the command line bc of the _', default=False)
 
 ```
 
@@ -54,9 +56,11 @@ sweep_params = create_parser_and_parse_args(FrequencySweep)
 ### Setting and getting parameters
 ```python
 print(sweep_params.freqs)  # prints a numpy array of size (20,) array([0.0e+00, 1.0e+08, 2.0e+08, …
-sweep_params.freqs = [5, 10, 5]
+sweep_params.freqs = [5e9, 10e9, 2e9]
 print(sweep_params.freqs)  # prints array([0.e+00, 2.e+09, 4.e+09, 6.e+09, 8.e+09])
 print(sweep_params.is_test)  # prints True
+sweep_params.freqs = [None, 10e9, 2e9]
+print(sweep_params.freqs)  # prints [None, 10e9, 2e9]
 ```
 
 ### JSON and YAML serialization
@@ -77,11 +81,18 @@ sweep_params = from_yaml_file('test_params.yaml')
 ### Nested Params
 ```python
 class MultipleFreqSweeps(Params):
-    sweep_1 = FrequencySweep(freqs=[0, 1, 0.1])  # overwrites default freqs value
-    sweep_2 = FrequencySweep(freqs=[1, 2, 0.1])  # overwrites default freqs value
+    sweep_1 = FrequencySweep(freqs=[0, 1e9, 0.1e9])  # overwrites default freqs value
+    sweep_2 = FrequencySweep(freqs=[1e9, 2e9, 0.1e9])  # overwrites default freqs value
     
 # Hide a nested param:
 class MultipleFreqSweepsHidden(Params):
     sweep_1 = FrequencySweep(freqs='__hide__')
     sweep_2 = FrequencySweep(power='__hide__')
+    
+# Customize prefixes used for command line parsing    
+class MultipleFreqSweepsCustom(Params):
+    sweep_1 = FrequencySweep()
+    sweep_2 = FrequencySweep()
+    __nested_prefixes__ = {'sweep_1': None, 'sweep_2': 'second_'}
+    # Ex command line: '--freqs 100 120 2 --power -30 --second_power -40'
 ```

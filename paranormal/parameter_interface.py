@@ -11,8 +11,7 @@ import yaml
 from pampy import match, MatchError
 
 from paranormal.params import *
-from paranormal.units import unconvert_si_units
-
+from paranormal.units import convert_to_si_units, unconvert_si_units
 
 __all__ = ['Params', 'to_json_serializable_dict', 'from_json_serializable_dict', 'to_yaml_file',
            'from_yaml_file', 'create_parser_and_parse_args', 'to_argparse', 'from_parsed_args',
@@ -72,9 +71,20 @@ class Params(Mapping):
         return json.loads(json.dumps(to_json_serializable_dict(self))) == \
                json.loads(json.dumps(to_json_serializable_dict(other)))
 
-    def si_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
+    def unit_set(self, param_name: str, value: Union[float, int, Iterable]) -> None:
         """
-        Set the parameter from a value that's in SI units
+        Set the parameter from a value that's in the param units specified in the Params class
+        definition
+
+        Ex.
+        ```
+        class A(Params):
+            f = FloatParam(help='float', unit='ns')
+
+        a = A()
+        a.unit_set('a', 5)
+        print(a.f)  # prints 5e-9
+        ```
 
         :param param_name: The parameter name to set
         :param value: The new value in SI units
@@ -82,20 +92,25 @@ class Params(Mapping):
         param = type(self).__dict__.get(param_name)
         expanded_units = _expand_param_units(param)
         if expanded_units is not None:
-            values = [unconvert_si_units(v, u) for v, u in zip(value, expanded_units)]
+            values = [convert_to_si_units(v, u) for v, u in zip(value, expanded_units)]
             setattr(self, param_name, values)
         else:
             unit = get_param_unit(type(self), param_name)
-            setattr(self, param_name, unconvert_si_units(value, unit))
+            if not isinstance(value, Iterable):
+                setattr(self, param_name, convert_to_si_units(value, unit))
+            else:
+                # need to keep parameter type
+                val_type = type(value)
+                setattr(self, param_name, val_type([convert_to_si_units(v, unit) for v in value]))
 
-    def si_update(self, **kwargs) -> None:
+    def unit_update(self, **kwargs) -> None:
         """
-        Set parameters from multiple values in si units
+        Set parameters from multiple values using units specified in the Params class definition
 
         :param kwargs: parameter names and values to set
         """
         for k, v in kwargs.items():
-            self.si_set(k, v)
+            self.unit_set(k, v)
 
     def update(self, **kwargs) -> None:
         """
@@ -174,8 +189,10 @@ def to_json_serializable_dict(params: Params,
     for k, v in type(params).__dict__.items():
         if params_to_omit is not None and k in params_to_omit:
             continue
-        if ((not k.startswith('_') or include_hidden_params) and
-                (include_defaults or k in params.__dict__)):
+        if (
+                (not k.startswith('_') or include_hidden_params) and
+                (include_defaults or k in params.__dict__)
+        ):
             if isinstance(v, BaseDescriptor):
                 retval[k] = v.to_json(params)
             elif isinstance(v, Params):
@@ -512,6 +529,13 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     default = param.default if required is None else None
     unit = getattr(param, 'unit', None)
 
+    # display default in units of `unit`. Unit will get added back in `from_parsed_args`
+    expanded_units = _expand_param_units(param)
+    if expanded_units is not None and default is not None:
+        default = tuple([unconvert_si_units(d, u) for d, u in zip(default, expanded_units)])
+    else:
+        default = unconvert_si_units(default, unit)
+
     # format metavar nicely for parameters that have expanded versions but aren't expanded
     # check to see if the parameter has expanded param names
     metavar = None
@@ -691,7 +715,9 @@ def _extract_expanded_param(parsed_values: dict,
     start_stop_x_list = [parsed_values[n] for n in old_arg_names]
     if all([x is None for x in start_stop_x_list]):
         return None
-    return start_stop_x_list
+    units = _expand_param_units(param)
+    si_unit_start_stop_x = [convert_to_si_units(p, u) for p, u in zip(start_stop_x_list, units)]
+    return si_unit_start_stop_x
 
 
 def _create_param_name_prefix(enclosing_param_name: Optional[str],
@@ -809,6 +835,50 @@ def _flatten_cls_params(cls: type(Params),
     return already_flat_params
 
 
+def _unflatten_params_cls(cls: type(Params),
+                          parsed_params: dict,
+                          prefix: Optional[str] = None,
+                          params_to_omit: Optional[Set[str]] = None) -> Params:
+    """
+    Recursively construct a Params class or subclass (handles nested Params classes) using values
+    parsed from the command line, and apply units.
+
+    :param cls: The Params class to create an instance of
+    :param parsed_params: The params parsed from the command line
+    :param prefix: The prefix for all param names
+    :param params_to_omit: Params to set to None when de-serializing the parsed params dictionary
+    :return: An instance of cls with params set from the parsed params dictionary
+    """
+    cls_specific_params = {}
+    for k, v in cls.__dict__.items():
+        if k.startswith('_') or getattr(v, 'hide', False):
+            continue
+        elif isinstance(v, BaseDescriptor):
+            if params_to_omit is not None and k in params_to_omit:
+                cls_specific_params[k] = None
+                continue
+            param_name = prefix + k if k not in parsed_params and prefix is not None else k
+            if getattr(v, 'expand', False):
+                unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
+                cls_specific_params.update({k: unexpanded_param})
+            else:
+                if isinstance(parsed_params[param_name], Iterable) and \
+                        not isinstance(parsed_params[param_name], str):
+                    cls_specific_params[k] = [convert_to_si_units(p, getattr(v, 'unit', None))
+                                              for p in parsed_params[param_name]]
+                else:
+                    cls_specific_params[k] = convert_to_si_units(parsed_params[param_name],
+                                                                 getattr(v, 'unit', None))
+        elif isinstance(v, Params):
+            _params_to_omit = _get_omitted_params(v)
+            next_prefix = _create_param_name_prefix(k, getattr(cls, '__nested_prefixes__', None))
+            _prefix = prefix + next_prefix if prefix is not None else next_prefix
+            cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
+                                                           prefix=_prefix,
+                                                           params_to_omit=_params_to_omit)
+    return cls(**cls_specific_params)
+
+
 def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
     """
     Convert a Params class or subclass to an argparse argument parser.
@@ -833,44 +903,6 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
                if getattr(p, 'positional', False)) <= 1, \
         'Behavior is undefined for multiple positional arguments with nargs=+|*|?'
     return parser
-
-
-def _unflatten_params_cls(cls: type(Params),
-                          parsed_params: dict,
-                          prefix: Optional[str] = None,
-                          params_to_omit: Optional[Set[str]] = None) -> Params:
-    """
-    Recursively construct a Params class or subclass (handles nested Params classes) using values
-    parsed from the command line.
-
-    :param cls: The Params class to create an instance of
-    :param parsed_params: The params parsed from the command line
-    :param prefix: The prefix for all param names
-    :param params_to_omit: Params to set to None when de-serializing the parsed params dictionary
-    :return: An instance of cls with params set from the parsed params dictionary
-    """
-    cls_specific_params = {}
-    for k, v in cls.__dict__.items():
-        if k.startswith('_') or getattr(v, 'hide', False):
-            continue
-        elif isinstance(v, BaseDescriptor):
-            if params_to_omit is not None and k in params_to_omit:
-                cls_specific_params[k] = None
-                continue
-            param_name = prefix + k if k not in parsed_params and prefix is not None else k
-            if getattr(v, 'expand', False):
-                unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
-                cls_specific_params.update({k: unexpanded_param})
-            else:
-                cls_specific_params[k] = parsed_params[param_name]
-        elif isinstance(v, Params):
-            _params_to_omit = _get_omitted_params(v)
-            next_prefix = _create_param_name_prefix(k, getattr(cls, '__nested_prefixes__', None))
-            _prefix = prefix + next_prefix if prefix is not None else next_prefix
-            cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
-                                                           prefix=_prefix,
-                                                           params_to_omit=_params_to_omit)
-    return cls(**cls_specific_params)
 
 
 def from_parsed_args(*cls_list, params_namespace: Namespace) -> Tuple[Params]:
