@@ -84,15 +84,23 @@ class MultipleFreqSweeps(Params):
     sweep_1 = FrequencySweep(freqs=[0, 1e9, 0.1e9])  # overwrites default freqs value
     sweep_2 = FrequencySweep(freqs=[1e9, 2e9, 0.1e9])  # overwrites default freqs value
     
-# Hide a nested param:
+# Omit a nested param from the outer class:
 class MultipleFreqSweepsHidden(Params):
-    sweep_1 = FrequencySweep(freqs='__hide__')
-    sweep_2 = FrequencySweep(power='__hide__')
-    
+    sweep_1 = FrequencySweep(freqs='__omit__')
+    sweep_2 = FrequencySweep(power='__omit__')
+        
 # Customize prefixes used for command line parsing    
 class MultipleFreqSweepsCustom(Params):
     sweep_1 = FrequencySweep()
     sweep_2 = FrequencySweep()
     __nested_prefixes__ = {'sweep_1': None, 'sweep_2': 'second_'}
     # Ex command line: '--freqs 100 120 2 --power -30 --second_power -40'
+    
+# Hide a nested param from the command line, but keep it in the class:
+class MultipleFreqSweepsCustom(Params):
+    sweep_1 = FrequencySweep()
+    sweep_2 = FrequencySweep()
+    __nested_prefixes__ = {'sweep_1': None, 'sweep_2': 'second_'}
+    __params_to_hide__ = ['sweep_2_power']
+
 ```
