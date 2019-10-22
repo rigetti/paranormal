@@ -88,8 +88,14 @@ class DoubleSweep(Params):
     time_sweep = TimeSweep()
 
 
+class OmittedWinterSchedule(Params):
+    winter = MyWinter(s='__omit__', dpw_w='__omit__')
+
+
 class HiddenWinterSchedule(Params):
-    winter = MyWinter(s='__hide__', dpw_w='__hide__')
+    winter = MyWinter()
+    __params_to_hide__ = ['w_start', 'w_stop', 'w_num', 'dpw_w']
+    __nested_prefixes__ = {'winter': None}
 
 
 class HiddenFall(Params):
@@ -155,7 +161,7 @@ def test_json_serialization():
     assert p == from_json_serializable_dict(j)
 
     # test with hiding some nested params
-    y = HiddenWinterSchedule()
+    y = OmittedWinterSchedule()
     j = json.loads(json.dumps(to_json_serializable_dict(y)))
     assert y == from_json_serializable_dict(j)
 
@@ -174,8 +180,8 @@ def test_json_serialization():
     x = DoubleSweep()
     assert x != y
 
-    # ensure warnings are working when setting something to __hide__
-    y.freq_sweep.freqs = '__hide__'
+    # ensure warnings are working when setting something to __omit__
+    y.freq_sweep.freqs = '__omit__'
     with pytest.warns(UserWarning):
         to_json_serializable_dict(y)
 
@@ -335,10 +341,15 @@ def test_to_argparse():
     with pytest.raises(ValueError):
         to_argparse(BadFreqSweep)
 
+    # test with omitting some nested params
+    parser = to_argparse(OmittedWinterSchedule)
+    args = parser.parse_args([])
+    assert vars(args) == {'winter_hib': False}
+
     # test with hiding some nested params
     parser = to_argparse(HiddenWinterSchedule)
     args = parser.parse_args([])
-    assert vars(args) == {'winter_hib': False}
+    assert vars(args) == {'s': 12, 'hib': False}
 
     # test by overriding prefix behavior
     class PrefixMania(Params):
@@ -347,7 +358,7 @@ def test_to_argparse():
     class NestedPrefixMania(Params):
         a = PrefixMania()
         b = PrefixMania()
-        __nested_prefixes__ = {'a': 'ayy', 'b': None}
+        __nested_prefixes__ = {'a': 'ayy_', 'b': None}
 
     parser = to_argparse(NestedPrefixMania)
     args = parser.parse_args([])
@@ -410,11 +421,18 @@ def test_from_parsed_args():
                      ('time_sweep', TimeSweep(times=[20e-9, 30e-9, 20]))]
     _compare_two_param_item_lists(y.items(), correct_items)
 
+    # test with ommitting some nested params
+    parser = to_argparse(OmittedWinterSchedule)
+    args = parser.parse_args([])
+    y = from_parsed_args(OmittedWinterSchedule, params_namespace=args)[0]
+    correct_items = [('winter', MyWinter(dpw_w=None, s=None))]
+    _compare_two_param_item_lists(y.items(), correct_items)
+
     # test with hiding some nested params
     parser = to_argparse(HiddenWinterSchedule)
     args = parser.parse_args([])
     y = from_parsed_args(HiddenWinterSchedule, params_namespace=args)[0]
-    correct_items = [('winter', MyWinter(dpw_w=None, s=None))]
+    correct_items = [('winter', MyWinter())]
     _compare_two_param_item_lists(y.items(), correct_items)
 
     # test that hide param works

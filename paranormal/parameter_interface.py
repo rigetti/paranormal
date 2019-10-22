@@ -177,7 +177,6 @@ def to_json_serializable_dict(params: Params,
 
     """
     Convert Params class to a json serializable dictionary
-
     :param params: Params class to convert
     :param include_defaults: Whether or not to include the param attribute default values if the
         values haven't been set yet
@@ -190,7 +189,7 @@ def to_json_serializable_dict(params: Params,
         if params_to_omit is not None and k in params_to_omit:
             continue
         if (
-                (not k.startswith('_') or include_hidden_params) and
+                (not k.startswith('_') or not getattr(v, 'hide', False) or include_hidden_params) and
                 (include_defaults or k in params.__dict__)
         ):
             if isinstance(v, BaseDescriptor):
@@ -215,7 +214,6 @@ def from_json_serializable_dict(dictionary: dict,
                                 params_to_omit: Optional[Set[str]] = None) -> Params:
     """
     Convert from a json serializable dictionary to a Params class
-
     :param dictionary: a dictionary in the format returned by to_json_serializable_dict to convert
         back to a Params class
     :param params_to_omit: Params to set to None when de-serializing the dictionary
@@ -519,7 +517,7 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     argtype = _get_param_type(param)
     if argtype == type(None):
         raise NotImplementedError(f'Argparse type not implemented '
-                                  f'for {param.__class__.__name__} and default not specifed')
+                                  f'for {param.__class__.__name__} and default not specified')
     positional = getattr(param, 'positional', False)
     if getattr(param, 'prefix', '') != '' and not getattr(param, 'expand', False):
         raise ValueError(f'Failure with param {name}. Cannot add a prefix to a class without the'
@@ -579,13 +577,21 @@ def _add_param_to_parser(name: str, param: BaseDescriptor, parser: ArgumentParse
     parser.add_argument(argname, **kwargs)
 
 
+def _get_hidden_params(cls: Params) -> Set[str]:
+    """
+    Get a set of all params that are listed in __params_to_hide__
+    """
+    # TODO: need to recurse for doubly-nested params classes
+    return set(getattr(cls, '__params_to_hide__', []))
+
+
 def _get_omitted_params(params: Params) -> Set[str]:
     """
-    Get a set of all params that have their value set to __hide__
+    Get a set of all params that have their value set to __omit__
     """
     return set(_k for _k in params.keys()
                if isinstance(params.__dict__.get(_k, None), str) and
-               params.__dict__.get(_k, None) == '__hide__')
+               params.__dict__.get(_k, None) == '__omit__')
 
 
 def _get_expanded_param_names(param: BaseDescriptor) -> List[str]:
@@ -765,7 +771,7 @@ def _create_param_name_prefix(enclosing_param_name: Optional[str],
     """
     if prefix_dictionary is not None and enclosing_param_name is not None:
         prefix = prefix_dictionary.get(enclosing_param_name, enclosing_param_name)
-        return prefix + '_' if prefix is not None else ''
+        return prefix if prefix is not None else ''
     return enclosing_param_name + '_' if enclosing_param_name is not None else ''
 
 
@@ -775,11 +781,10 @@ def _flatten_cls_params(cls: type(Params),
                         defaults_to_overwrite: Optional[Dict] = None) -> Dict:
     """
     Extract params from a Params class - Behavior is as follows:
-
     1. Params with names starting in _ or with the hide attribute set to True will be ignored
     2. Properties and params in the params_to_omit set will be ignored
     3. If the class contains nested params classes, those will be flattened. Any nested class
-        param set to __hide__ will be omitted
+        param set to __omit__ will be omitted
     4. If use_prefix is True, a prefix (the enclosing param name) will be prepended to any nested
         class parameter names no matter what.
     5. If there are any name conflicts during flattening, those will be resolved by prepending the
@@ -788,10 +793,8 @@ def _flatten_cls_params(cls: type(Params),
     """
     already_flat_params = {}
     for name, param in vars(cls).items():
-        # ignore params that start with _ or are in params_to_omit or have the hide attribute = True
-        if (name.startswith('_') or
-                (params_to_omit is not None and name in params_to_omit) or
-                getattr(param, 'hide', False)):
+        # ignore params are in params_to_omit
+        if params_to_omit is not None and name in params_to_omit:
             continue
         # if we have an actual param
         elif isinstance(param, BaseDescriptor):
@@ -838,7 +841,8 @@ def _flatten_cls_params(cls: type(Params),
 def _unflatten_params_cls(cls: type(Params),
                           parsed_params: dict,
                           prefix: Optional[str] = None,
-                          params_to_omit: Optional[Set[str]] = None) -> Params:
+                          params_to_omit: Optional[Set[str]] = None,
+                          params_to_hide: Optional[Set[str]] = None) -> Params:
     """
     Recursively construct a Params class or subclass (handles nested Params classes) using values
     parsed from the command line, and apply units.
@@ -851,13 +855,14 @@ def _unflatten_params_cls(cls: type(Params),
     """
     cls_specific_params = {}
     for k, v in cls.__dict__.items():
-        if k.startswith('_') or getattr(v, 'hide', False):
-            continue
-        elif isinstance(v, BaseDescriptor):
+        if isinstance(v, BaseDescriptor):
             if params_to_omit is not None and k in params_to_omit:
                 cls_specific_params[k] = None
                 continue
             param_name = prefix + k if k not in parsed_params and prefix is not None else k
+            if (params_to_hide is not None and param_name in params_to_hide) or \
+                    param_name.startswith('_') or getattr(v, 'hide', False):
+                continue
             if getattr(v, 'expand', False):
                 unexpanded_param = _extract_expanded_param(parsed_params, param_name, v, prefix)
                 cls_specific_params.update({k: unexpanded_param})
@@ -875,7 +880,8 @@ def _unflatten_params_cls(cls: type(Params),
             _prefix = prefix + next_prefix if prefix is not None else next_prefix
             cls_specific_params[k] = _unflatten_params_cls(type(v), parsed_params,
                                                            prefix=_prefix,
-                                                           params_to_omit=_params_to_omit)
+                                                           params_to_omit=_params_to_omit,
+                                                           params_to_hide=_get_hidden_params(cls))
     return cls(**cls_specific_params)
 
 
@@ -896,7 +902,11 @@ def to_argparse(cls: type(Params), **kwargs) -> ArgumentParser:
         flattened_params['positionals'] = positional_param
 
     # actually add the params to the argument parser
+    hidden_params = _get_hidden_params(cls)
     for name, param in flattened_params.items():
+        # don't expose hidden params through argparse
+        if getattr(param, 'hide', False) or name in hidden_params or name.startswith('_'):
+            continue
         _add_param_to_parser(name, param, parser)
 
     assert sum(getattr(p, 'nargs', '') not in ['+', '*', '?'] for p in vars(cls).values()
