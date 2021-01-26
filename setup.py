@@ -14,7 +14,7 @@ readme = ""
 setup(
     long_description=readme,
     name="paranormal",
-    version="0.2.2",
+    version="0.2.3",
     description="Coherent management of large parameter lists in Python",
     python_requires=">3.6",
     author="Schuyler Fried",
