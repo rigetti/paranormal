@@ -27,6 +27,15 @@ include:
   - apt-get install -f -y nodejs
   - npm i
 
+.load-deploy-key: &load-deploy-key
+    - git config --global user.email "22137047+kalzoo@users.noreply.github.com"
+    - git config --global user.name  "kalzoo"
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 0600 "${!GITHUB_DEPLOY_KEY}"
+    - ssh-add "${!GITHUB_DEPLOY_KEY}"
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+
 .publish-pypi-public: &publish-pypi-public
   - poetry config http-basic.pypi $PUBLIC_PYPI_USERNAME $PUBLIC_PYPI_PASSWORD
   - poetry publish --build -r pypi
@@ -41,6 +50,7 @@ test:
 PyPi Publish Release:
   stage: deploy
   script:
+    - *load-deploy-key
     - *install-dependencies
     - *install-dephell
     - *install-npm
