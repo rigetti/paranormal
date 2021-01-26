@@ -1,9 +1,64 @@
 image: python:3.6
 
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip
+    - .venv
+
+include:
+  # See https://docs.gitlab.com/ee/ci/yaml/README.html#workflowrules-templates
+  - template: "Workflows/Branch-Pipelines.gitlab-ci.yml"
+
+.install-dependencies:
+  &install-dependencies # Recommended install method for Poetry: https://python-poetry.org/docs/
+  - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+  - source $HOME/.poetry/env
+  - poetry --version
+  - poetry config virtualenvs.in-project true
+  - poetry install -vv
+
+.install-dephell: &install-dephell # Install dephell to auto-generate setup.py
+  - curl -L dephell.org/install | python
+
+.install-npm: &install-npm
+  - curl -sL https://deb.nodesource.com/setup_12.x | bash -
+  - apt-get update
+  - apt-get install -f -y nodejs
+  - npm i
+
+.load-deploy-key: &load-deploy-key
+    - git config --global user.email "22137047+kalzoo@users.noreply.github.com"
+    - git config --global user.name  "kalzoo"
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 0600 "${!GITHUB_DEPLOY_KEY}"
+    - ssh-add "${!GITHUB_DEPLOY_KEY}"
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+
+.publish-pypi-public: &publish-pypi-public
+  - poetry config http-basic.pypi $PUBLIC_PYPI_USERNAME $PUBLIC_PYPI_PASSWORD
+  - poetry publish --build -r pypi
+
 test:
   tags:
     - github
   script:
-    - pip install poetry
-    - poetry install
+    - *install-dependencies
     - poetry run pytest
+
+PyPi Publish Release:
+  stage: deploy
+  script:
+    - *load-deploy-key
+    - *install-dependencies
+    - *install-dephell
+    - *install-npm
+    # This performs the semantic-release configured in package.json.
+    # Depending on the config, this may add a tag and then push a release to Gitlab.
+    - npx semantic-release --branches $CI_DEFAULT_BRANCH
+    # This reads the tag chosen by semantic-release
+    - *publish-pypi-public
+  rules:
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+      when: on_success
