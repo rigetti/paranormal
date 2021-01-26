@@ -32,8 +32,8 @@ include:
     - git config --global user.name  "kalzoo"
     - eval $(ssh-agent -s)
     - mkdir -p ~/.ssh
-    - chmod 0600 "${!GITHUB_DEPLOY_KEY}"
-    - ssh-add "${!GITHUB_DEPLOY_KEY}"
+    - chmod 0600 "${GITHUB_DEPLOY_KEY}"
+    - ssh-add "${GITHUB_DEPLOY_KEY}"
     - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
 
 .publish-pypi-public: &publish-pypi-public
