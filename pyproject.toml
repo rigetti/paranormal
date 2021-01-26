@@ -4,6 +4,9 @@ version = "0.2.1"
 description = "Coherent management of large parameter lists in Python"
 authors = ["Schuyler Fried <schuylerfried@gmail.com>", "Steven Heidel <steven@heidel.ca"]
 license = "Apache-2.0"
+packages = [
+    { include = "paranormal" }
+]
 
 [tool.poetry.dependencies]
 python = ">3.6"
